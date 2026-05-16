@@ -101,11 +101,13 @@ def _parse_digest_articles(digest_path: Path) -> list[dict]:
             if not line:
                 continue
 
-            # Priority tag from the first line (contains 🔥 or ⚡)
+            # Priority tag from the first line (contains 🔥 or ⚡ or 📌)
             if "🔥" in line:
                 priority = "🔥"
             elif "⚡" in line:
                 priority = "⚡"
+            elif "📌" in line:
+                priority = "📌"
 
             # Title line — 📰
             if "\U0001F4F0" in line and not title:
@@ -159,9 +161,10 @@ def _format_telegram_message(articles: list[dict], date_str: str) -> tuple[str, 
         return re.sub(r"([_*\[\]()~`>#+\-=|{}.!\\])", r"\\\1", text)
 
     today_display = date.today().strftime("%B %d, %Y")
+    clean_tagline = BOT_TAGLINE.replace("🎙️", "").strip()
     lines = [
-        f"*🔥 AI Tech Digest — {esc(today_display)}*",
-        f"_{esc(BOT_TAGLINE)}_",
+        f"*AI Tech Digest — {esc(today_display)}*",
+        f"_{esc(clean_tagline)}_",
         "",
     ]
 
@@ -169,33 +172,40 @@ def _format_telegram_message(articles: list[dict], date_str: str) -> tuple[str, 
 
     for i, art in enumerate(articles, 1):
         priority = art["priority"]
-        title    = esc(art["title"][:80])
-        summary  = esc(art["summary"][:160]) if art["summary"] else ""
+        title    = esc(art["title"])
+        summary  = esc(art["summary"]) if art["summary"] else ""
         source   = esc(art["source"]) if art["source"] else ""
-        impact   = esc(art["impact"][:100]) if art["impact"] else ""
+        impact   = esc(art["impact"]) if art["impact"] else ""
+        context  = esc(art.get("context", "")) if art.get("context") else ""
 
-        lines.append(f"{priority} *{i}\\. {title}*")
+        lines.append(f"*{i}\\. {title}*")
+        lines.append("")
         if source:
-            lines.append(f"📡 _{source}_")
+            lines.append(f"• *Source:* _{source}_")
+            lines.append("")
         if summary:
-            lines.append(summary)
-        context = esc(art.get("context", "")[:180]) if art.get("context") else ""
+            lines.append(f"• *Summary:* {summary}")
+            lines.append("")
         if context:
-            lines.append(f"🧠 _{context}_")
+            lines.append(f"• *Context:* {context}")
+            lines.append("")
         if impact:
-            lines.append(f"💡 _{impact}_")
+            lines.append(f"• *Impact:* {impact}")
+        # Visual divider between stories (except after last)
+        if i < len(articles):
+            lines.append("―――――――――――――")
         lines.append("")
 
         if art.get("link"):
             buttons.append([
                 InlineKeyboardButton(
-                    f"{i}. {art['title'][:40]}...",
+                    f"{i}. {art['title'][:45]}...",
                     url=art["link"]
                 )
             ])
 
     lines.append("─────────────────────────")
-    lines.append("🎙️ _Voice note below_ ⬇️")
+    lines.append("_Voice note below_")
 
     keyboard = InlineKeyboardMarkup(buttons) if buttons else None
     return "\n".join(lines), keyboard
