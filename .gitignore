@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+.digest_cache.json
+
+# Audio and text output
+digests/*.mp3
+digests/*.txt
+!digests/.gitkeep
+
+# IDEs
+.vscode/
+.idea/
+.DS_Store
+
+# Scratch scripts
+scratch/
