@@ -93,31 +93,43 @@ export function LightPullThemeSwitcher() {
         <div aria-hidden="true" style={curtainStyle} />
 
         {/* Pull Cord */}
-        <div className="relative overflow-hidden h-56 w-24 flex justify-center pointer-events-auto z-9998">
+        <div className="relative h-56 w-24 flex justify-center pointer-events-auto z-9998">
           <motion.div
-            drag="y"
-            dragDirectionLock
-            onDragEnd={(event, info) => {
-              // Trigger toggle if pulled down far enough
-              if (info.offset.y > 20) {
-                toggleDarkMode();
-              }
+            animate={{ rotate: [-3, 3] }}
+            transition={{
+              repeat: Infinity,
+              repeatType: "reverse",
+              duration: 2,
+              ease: "easeInOut",
             }}
-            dragConstraints={{ top: 0, right: 0, bottom: 0, left: 0 }}
-            dragTransition={{ bounceStiffness: 500, bounceDamping: 15 }}
-            dragElastic={0.075}
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.95 }}
-            whileDrag={{ cursor: "grabbing" }}
-            className="absolute top-16 w-12 h-12 rounded-full cursor-grab
-                 bg-[radial-gradient(circle_at_center,#facc15,#fcd34d,#fef9c3)] 
-                 dark:bg-[radial-gradient(circle_at_center,#64748b,#334155,#0f172a)] 
-                 shadow-[0_0_30px_12px_rgba(250,204,21,0.6)] 
-                 dark:shadow-[0_0_30px_10px_rgba(148,163,184,0.4)]
-                 border-2 border-yellow-200 dark:border-slate-500"
+            style={{ transformOrigin: "center -500px" }}
+            className="absolute inset-0 w-full h-full flex justify-center"
           >
-            {/* The actual string */}
-            <div className="absolute bottom-12 left-1/2 -translate-x-1/2 w-1 h-[9999px] bg-neutral-300 dark:bg-slate-600 shadow-sm"></div>
+            <motion.div
+              drag="y"
+              dragDirectionLock
+              onDragEnd={(event, info) => {
+                // Trigger toggle if pulled down far enough
+                if (info.offset.y > 20) {
+                  toggleDarkMode();
+                }
+              }}
+              dragConstraints={{ top: 0, right: 0, bottom: 0, left: 0 }}
+              dragTransition={{ bounceStiffness: 500, bounceDamping: 15 }}
+              dragElastic={0.075}
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.95 }}
+              whileDrag={{ cursor: "grabbing" }}
+              className="absolute top-16 w-12 h-12 rounded-full cursor-grab
+                   bg-[radial-gradient(circle_at_center,#facc15,#fcd34d,#fef9c3)] 
+                   dark:bg-[radial-gradient(circle_at_center,#64748b,#334155,#0f172a)] 
+                   shadow-[0_0_30px_12px_rgba(250,204,21,0.6)] 
+                   dark:shadow-[0_0_30px_10px_rgba(148,163,184,0.4)]
+                   border-2 border-yellow-200 dark:border-slate-500"
+            >
+              {/* The actual string */}
+              <div className="absolute bottom-12 left-1/2 -translate-x-1/2 w-1 h-[9999px] bg-neutral-300 dark:bg-slate-600 shadow-sm"></div>
+            </motion.div>
           </motion.div>
         </div>
       </>
