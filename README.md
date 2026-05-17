@@ -494,10 +494,4 @@ ai-news-agent/
 
 ---
 
-## License
-
-MIT License — Free to use, fork, and build upon.
-
----
-
 *Built with ❤️ by Ayush Aryan — Making AI news accessible to everyone, one briefing at a time.*
