@@ -44,7 +44,7 @@ function Navbar() {
 export default function Home() {
   return (
     <main className="bg-white dark:bg-gray-950">
-      <div className="fixed top-0 right-4 sm:right-12 z-[60]">
+      <div className="fixed top-0 right-4 sm:right-12 z-60">
         <LightPullThemeSwitcher />
       </div>
       <Navbar />

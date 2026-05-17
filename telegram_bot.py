@@ -380,7 +380,16 @@ async def cmd_latest(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     if not update.message or not update.effective_chat:
         return
     chat_id = str(update.effective_chat.id)
-    await update.message.reply_text("⏳ Fetching today's digest...")
+    
+    await update.message.reply_text("⏳ Fetching today's digest... (Might take a minute if generating fresh)")
+    
+    import asyncio
+    from scheduler import ensure_digest_generated
+    try:
+        await asyncio.to_thread(ensure_digest_generated)
+    except Exception as e:
+        print(f"❌ Error generating digest on demand: {e}")
+
     success = await send_digest(chat_id)
     if not success:
         await update.message.reply_text(
