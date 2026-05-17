@@ -337,20 +337,32 @@ All "Subscribe" buttons link directly to `https://t.me/aitechdigest_bot`.
 ## Difficulties Faced & How We Solved Them
 
 ### 1. Achieving Zero-Cost Scaling
-**Problem Statement**: How do we build a system that can deliver daily AI news and audio to potentially thousands of users without incurring massive LLM API and TTS generation costs? 
-**Solution**: We implemented a "lazy initialization" and aggressive caching strategy. The LLM text generation and the `edge-tts` audio generation execute **only once per day per language**, regardless of the subscriber count. We then built a layered deduplication system (In-Session, Cross-Day DB, and Same-Day JSON Cache) to ensure we never waste LLM tokens re-evaluating the same articles. The backend also embeds a dummy HTTP server, allowing it to run entirely on Render's Free Web Service tier.
+- **The Problem**: Delivering daily AI news and audio to thousands of users typically incurs massive LLM API and TTS generation costs.
+- **The Solution**: 
+  - Implemented **"lazy initialization"** and aggressive caching so LLM text and `edge-tts` audio generate **only once per day per language**.
+  - Built a layered deduplication system (In-Session, Cross-Day DB, and Same-Day JSON Cache) to prevent wasting tokens.
+  - Embedded a lightweight HTTP server in the backend, enabling the bot to run entirely on Render's Free Web Service tier.
 
 ### 2. Crafting a Readable Telegram Delivery Format
-**Problem Statement**: Delivering dense AI news with context, summaries, and impact statements easily turns into a wall of unreadable text on a small mobile screen. Furthermore, Telegram's strict MarkdownV2 parser easily breaks, and character limits often truncated our summaries mid-sentence.
-**Solution**: We completely revamped the Telegram delivery structure. We removed character truncation limits, stripped out distracting emojis from the body text, and switched to a clean, spacious bullet-point layout. We dynamically escape all special characters to satisfy Telegram's MarkdownV2 constraints, and we added intentional line breaks between each story component (Source, Summary, Context, Impact) to maximize readability on mobile devices. 
+- **The Problem**: Dense AI news (with context, summaries, and impact statements) easily turns into an unreadable wall of text on mobile screens. Additionally, character limits truncated summaries and Telegram's MarkdownV2 parser easily broke.
+- **The Solution**: 
+  - Removed all character truncation limits and stripped distracting emojis from the body text.
+  - Switched to a clean, spacious bullet-point layout with intentional line breaks between each story component (Source, Summary, Context, Impact).
+  - Added dynamic escaping for all special characters to safely satisfy Telegram's MarkdownV2 constraints.
 
 ### 3. Delivering Authentic Multilingual Audio
-**Problem Statement**: Translating the text to Hindi was straightforward, but generating the voice briefing resulted in "Hinglish" (the TTS model reading hardcoded English transitions like "First up..." with a thick Hindi accent). 
-**Solution**: We built a language-aware Voice Engine. Instead of just translating the news payload, the engine uses entirely separate template dictionaries for English and Hindi. When Hindi is selected, it injects native Hindi intros ("सुप्रभात!"), transitions ("अगली खबर..."), and outros, ensuring the final audio feels like a seamless, high-quality local broadcast.
+- **The Problem**: While translating text to Hindi was straightforward, generating the voice briefing resulted in awkward "Hinglish" (the TTS model reading hardcoded English transitions like "First up..." with a thick Hindi accent).
+- **The Solution**: 
+  - Built a language-aware Voice Engine that uses entirely separate template dictionaries for English and Hindi.
+  - Injected native Hindi intros ("सुप्रभात!"), transitions ("अगली खबर..."), and outros when Hindi is selected.
+  - Ensured the final audio feels like a seamless, high-quality local broadcast.
 
 ### 4. Refining the Mobile Web Experience
-**Problem Statement**: The Next.js landing page looked stunning on desktop but suffered from critical overlap and alignment issues on small mobile screens (e.g., the "Subscribe Free" button crashing into the Dark Mode toggle, uncentered Hero buttons, and wrapping FAQ text).
-**Solution**: We applied strategic mobile-first responsive design fixes. We hid redundant CTA buttons in the mobile navbar (relying on the massive Hero CTA instead), forced flex containers to full width with explicit center alignments for the buttons, and locked the FAQ accordion components to a left-aligned text constraint to prevent them from inheriting parent centering rules.
+- **The Problem**: The Next.js landing page suffered from critical overlap and alignment issues on small mobile screens (e.g., the "Subscribe Free" button crashing into the Dark Mode toggle, uncentered Hero buttons, and wrapping FAQ text).
+- **The Solution**: 
+  - Hid redundant CTA buttons in the mobile navbar, relying instead on the massive Hero CTA.
+  - Forced flex containers to full width with explicit center alignments for the Hero buttons.
+  - Locked the FAQ accordion components to a strict left-aligned text constraint to prevent them from inheriting parent centering rules.
 
 ---
 
