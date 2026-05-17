@@ -160,8 +160,8 @@ NODE 3: RANK
   └─ 3-pass fallback fill to always reach exactly 5 stories
 
 NODE 4: OUTPUT
-  ├─ Format English digest with emoji markers (🔥/⚡, 📰, 🧠, 👉, 🔗)
-  ├─ Translate to Hindi via LLM (preserves emojis, company names, formatting)
+  ├─ Format English digest into clean, readable text files
+  ├─ Translate to Hindi via LLM (preserves company names and formatting)
   └─ Save both as digest_YYYY-MM-DD_en.txt and digest_YYYY-MM-DD_hi.txt
 ```
 
@@ -336,64 +336,21 @@ All "Subscribe" buttons link directly to `https://t.me/aitechdigest_bot`.
 
 ## Difficulties Faced & How We Solved Them
 
-### 1. The "Hinglish" Voice Bug
-**Problem**: The Hindi voice briefing was using English transitions ("First up...", "Why it matters...", "A bit of background..."). Since these were baked into the script builder as hardcoded English strings, the TTS model read English phrases in a Hindi accent — producing awkward "Hinglish" audio.
+### 1. Achieving Zero-Cost Scaling
+**Problem Statement**: How do we build a system that can deliver daily AI news and audio to potentially thousands of users without incurring massive LLM API and TTS generation costs? 
+**Solution**: We implemented a "lazy initialization" and aggressive caching strategy. The LLM text generation and the `edge-tts` audio generation execute **only once per day per language**, regardless of the subscriber count. We then built a layered deduplication system (In-Session, Cross-Day DB, and Same-Day JSON Cache) to ensure we never waste LLM tokens re-evaluating the same articles. The backend also embeds a dummy HTTP server, allowing it to run entirely on Render's Free Web Service tier.
 
-**Root Cause**: `build_script_from_articles()` in `voice_engine.py` had no language awareness. It used one set of templates for all languages.
+### 2. Crafting a Readable Telegram Delivery Format
+**Problem Statement**: Delivering dense AI news with context, summaries, and impact statements easily turns into a wall of unreadable text on a small mobile screen. Furthermore, Telegram's strict MarkdownV2 parser easily breaks, and character limits often truncated our summaries mid-sentence.
+**Solution**: We completely revamped the Telegram delivery structure. We removed character truncation limits, stripped out distracting emojis from the body text, and switched to a clean, spacious bullet-point layout. We dynamically escape all special characters to satisfy Telegram's MarkdownV2 constraints, and we added intentional line breaks between each story component (Source, Summary, Context, Impact) to maximize readability on mobile devices. 
 
-**Solution**: Refactored the script builder to accept a `lang` parameter. Added a complete set of native Hindi intro phrases, story transitions, background transitions, and outros. The function now picks the correct template set before assembling the script.
+### 3. Delivering Authentic Multilingual Audio
+**Problem Statement**: Translating the text to Hindi was straightforward, but generating the voice briefing resulted in "Hinglish" (the TTS model reading hardcoded English transitions like "First up..." with a thick Hindi accent). 
+**Solution**: We built a language-aware Voice Engine. Instead of just translating the news payload, the engine uses entirely separate template dictionaries for English and Hindi. When Hindi is selected, it injects native Hindi intros ("सुप्रभात!"), transitions ("अगली खबर..."), and outros, ensuring the final audio feels like a seamless, high-quality local broadcast.
 
----
-
-### 2. Critical Indentation Errors in `fetch_news.py`
-**Problem**: The pipeline would crash immediately on startup with `IndentationError`. The file had a mixture of tabs and spaces from multiple editing sessions, causing Python's parser to fail on nested `try/except` blocks inside `for` loops.
-
-**Solution**: Complete rewrite of `fetch_news.py` from scratch with consistent 4-space indentation. Added explicit `try/except` blocks around every individual RSS source fetch, so a single failed network request no longer crashes the entire ingestion run.
-
----
-
-### 3. Scheduler Crash on LLM Timeout
-**Problem**: If the Groq API was slow or returned a rate-limit error during the `analyze_node`, the exception would bubble all the way up to the scheduler's `hourly_job()` function and crash the loop — meaning no future deliveries would happen.
-
-**Solution**: Wrapped `run_pipeline()` call in `ensure_digest_generated()` with a top-level `try/except`. Added inner `try/except` blocks in `analyze_articles_parallel()` per article. A single failing article is skipped rather than killing the batch.
-
----
-
-### 4. Delivery Time Callback Bug
-**Problem**: When a user tapped "07:00 AM" on the Telegram inline keyboard, the callback data was `"time_07:00 AM"`. The handler used `data.split("_")[1]` which returned `"07:00 AM"` ✅. However the scheduler formatted the time as `datetime.now().strftime("%I:00 %p")` which produces `"07:00 AM"` ✅. The bug was a subtle case sensitivity issue — `strftime` on some systems returns `"07:00 am"` (lowercase). The DB stored `"07:00 AM"` but the query used the system-formatted string.
-
-**Solution**: Normalized both sides to uppercase with `.upper()` when comparing, and switched the callback data parser from fragile `split("_")[1]` to a safe prefix strip: `data[len("time_"):]`.
-
----
-
-### 5. New Subscribers Never Receiving News
-**Problem**: A user who opened the bot but closed Telegram after choosing their language (but before choosing a delivery time) had no `delivery_time` field in their MongoDB document. The `get_subscribers_by_time()` query filters by `delivery_time`, so this user was permanently invisible to the scheduler and would never receive anything — silently.
-
-**Solution**: Added `$setOnInsert` to the `save_subscriber()` upsert call in `db.py`. This sets default values (`language: "en"`, `delivery_time: "08:00 AM"`) only when the document is first created, never overwriting existing preferences. This ensures every new subscriber has a valid delivery time even if they abandon the registration flow.
-
----
-
-### 6. IDE False-Positive Import Errors
-**Problem**: VS Code's Pylance/Pyrefly linter showed red squiggles on `import edge_tts` and `import telegram` even though both packages were installed in the project's `./venv/`. The IDE was using the global Python interpreter at `/Library/Frameworks/Python.framework/Versions/3.14/` instead of the local virtual environment.
-
-**Solution (Two-Stage)**:
-1. Added a `.vscode/settings.json` with explicit absolute paths to the venv interpreter and site-packages.
-2. Created `pyrightconfig.json` in the project root pointing `venvPath` to `.` and `venv` to `"venv"`. Pyright reads this file automatically and correctly resolves all imports.
-3. Final fallback: Installed the packages globally (`pip3 install python-telegram-bot edge-tts`) so even the global interpreter could resolve them.
-
----
-
-### 7. Voice Engine CLI Looking for Wrong Filename
-**Problem**: Running `python3 voice_engine.py` from the command line would always fail with `❌ Digest file not found`. The CLI code hardcoded the digest filename as `digest_YYYY-MM-DD.txt` but all files are actually saved as `digest_YYYY-MM-DD_en.txt` (with the `_en` language suffix).
-
-**Solution**: Updated the CLI's default filename pattern to `digest_YYYY-MM-DD_en.txt`.
-
----
-
-### 8. `--voice` CLI Argument Rejecting Hindi
-**Problem**: The `--voice` argument in the voice engine CLI used `choices=list(VOICE_OPTIONS.keys())`, which only allowed short keys like `"ava"`, `"sonia"`. This meant passing `--voice hi-IN-MadhurNeural` would throw an `argparse` error.
-
-**Solution**: Removed the `choices=` constraint entirely. The underlying `VOICE_OPTIONS.get(voice_key, voice_key)` logic already handles unknown keys by treating them as direct `edge-tts` voice names — so any valid Microsoft Neural voice name is now accepted.
+### 4. Refining the Mobile Web Experience
+**Problem Statement**: The Next.js landing page looked stunning on desktop but suffered from critical overlap and alignment issues on small mobile screens (e.g., the "Subscribe Free" button crashing into the Dark Mode toggle, uncentered Hero buttons, and wrapping FAQ text).
+**Solution**: We applied strategic mobile-first responsive design fixes. We hid redundant CTA buttons in the mobile navbar (relying on the massive Hero CTA instead), forced flex containers to full width with explicit center alignments for the buttons, and locked the FAQ accordion components to a left-aligned text constraint to prevent them from inheriting parent centering rules.
 
 ---
 
@@ -443,14 +400,16 @@ cd landing && npm install && npm run dev
 | Component | Platform | Command |
 |---|---|---|
 | Database | MongoDB Atlas (M0 Free) | Connect via Atlas URI |
-| Backend Bot | Render (Background Worker) | `python run.py` |
+| Backend Bot | Render (Web Service) | `python run.py` |
 | Frontend | Vercel | Root directory: `landing/` |
 
 ### Render Configuration
 - **Build Command**: `pip install -r requirements.txt`
 - **Start Command**: `python run.py`
-- **Instance Type**: Free (Background Worker)
-- Add all 3 environment variables in Render's dashboard
+- **Instance Type**: Free (Web Service)
+- **Important**: We integrated a lightweight HTTP health-check server inside `run.py` so it cleanly binds to Render's `$PORT`, allowing the entire backend to run on the **Free Web Service** tier instead of requiring a paid Background Worker.
+- Add all 3 environment variables in Render's dashboard.
+- *Tip*: Use a free service like [cron-job.org](https://cron-job.org/) to ping your Render URL every 10 minutes to keep the bot awake 24/7!
 
 ### Vercel Configuration
 - Set **Root Directory** to `landing/` during import
