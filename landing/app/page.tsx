@@ -31,7 +31,7 @@ function Navbar() {
           href="https://t.me/aitechdigest_bot"
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2 rounded-full transition-all hover:scale-105"
+          className="hidden sm:inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2 rounded-full transition-all hover:scale-105"
         >
           <Send className="w-4 h-4" />
           Subscribe Free
@@ -44,7 +44,7 @@ function Navbar() {
 export default function Home() {
   return (
     <main className="bg-white dark:bg-gray-950">
-      <div className="fixed top-0 right-4 sm:right-12 z-60">
+      <div className="fixed top-0 right-4 sm:right-12 z-[60]">
         <LightPullThemeSwitcher />
       </div>
       <Navbar />

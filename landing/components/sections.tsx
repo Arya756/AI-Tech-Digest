@@ -425,7 +425,7 @@ export function FAQSection() {
                   <AccordionItem
                     value={`item-${i}`}
                     className="data-[state=open]:bg-white dark:data-[state=open]:bg-gray-800 peer rounded-xl border-none px-5 py-1 data-[state=open]:border-none md:px-7 transition-colors">
-                    <AccordionTrigger className="cursor-pointer text-base hover:no-underline text-gray-900 dark:text-white font-semibold">
+                    <AccordionTrigger className="cursor-pointer text-left text-base hover:no-underline text-gray-900 dark:text-white font-semibold">
                       {item.q}
                     </AccordionTrigger>
                     <AccordionContent>

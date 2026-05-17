@@ -81,7 +81,7 @@ function Hero() {
 
           {/* CTA Buttons */}
           <motion.div
-            className="flex flex-col sm:flex-row gap-4 mt-2"
+            className="flex flex-col sm:flex-row items-center justify-center w-full sm:w-auto gap-4 mt-2 px-4 sm:px-0"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.35 }}
@@ -90,20 +90,21 @@ function Hero() {
               href="https://t.me/aitechdigest_bot"
               target="_blank"
               rel="noopener noreferrer"
+              className="w-full sm:w-auto"
             >
               <Button
                 size="lg"
-                className="gap-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full px-8 py-3 text-base font-semibold shadow-lg shadow-indigo-200 transition-all hover:scale-105"
+                className="w-full sm:w-auto gap-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full px-8 py-3 text-base font-semibold shadow-lg shadow-indigo-200 transition-all hover:scale-105"
               >
                 <Send className="w-5 h-5" />
                 Subscribe on Telegram
               </Button>
             </a>
-            <a href="#how-it-works">
+            <a href="#how-it-works" className="w-full sm:w-auto">
               <Button
                 size="lg"
                 variant="outline"
-                className="gap-3 rounded-full px-8 py-3 text-base font-semibold border-gray-300 text-gray-700 hover:border-indigo-400 hover:text-indigo-700 dark:border-gray-700 dark:text-gray-300 dark:hover:text-indigo-400 dark:hover:border-indigo-500"
+                className="w-full sm:w-auto gap-3 rounded-full px-8 py-3 text-base font-semibold border-gray-300 text-gray-700 hover:border-indigo-400 hover:text-indigo-700 dark:border-gray-700 dark:text-gray-300 dark:hover:text-indigo-400 dark:hover:border-indigo-500"
               >
                 See how it works <MoveRight className="w-4 h-4" />
               </Button>
@@ -112,7 +113,7 @@ function Hero() {
 
           {/* Social Proof */}
           <motion.p
-            className="text-sm text-gray-400 mt-2"
+            className="text-sm text-gray-400 mt-2 text-center"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.6 }}
