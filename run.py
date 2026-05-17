@@ -3,6 +3,8 @@ import time
 import schedule
 import os
 import sys
+import http.server
+import socketserver
 
 # Import the main functions
 from telegram_bot import run_bot
@@ -18,11 +20,40 @@ def run_scheduler():
         schedule.run_pending()
         time.sleep(30)
 
+def run_health_check_server():
+    """Runs a minimal HTTP server to satisfy Render's Web Service port binding check."""
+    port = int(os.environ.get("PORT", 8080))
+    
+    class HealthHandler(http.server.SimpleHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.send_header("Content-type", "text/plain")
+            self.end_headers()
+            self.wfile.write(b"AI Tech Digest Bot is fully operational!")
+            
+        def log_message(self, format, *args):
+            # Suppress normal request logging to keep console output clean
+            return
+
+    # Allow port reuse to prevent address-already-in-use errors during redeployments
+    socketserver.TCPServer.allow_reuse_address = True
+    
+    print(f"📡 Starting dummy HTTP health-check server on port {port}...")
+    try:
+        with socketserver.TCPServer(("", port), HealthHandler) as httpd:
+            httpd.serve_forever()
+    except Exception as e:
+        print(f"⚠️ Health check server error: {e}")
+
 if __name__ == "__main__":
     # Ensure directories exist
     os.makedirs("digests", exist_ok=True)
     
     print("🌟 Starting AI Tech Digest Application...")
+    
+    # Start the dummy HTTP server so we can use Render's Free Web Service tier
+    http_thread = threading.Thread(target=run_health_check_server, daemon=True)
+    http_thread.start()
     
     # Start the scheduler in a background thread
     scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
