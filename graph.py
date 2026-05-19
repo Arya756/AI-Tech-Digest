@@ -1,7 +1,8 @@
 # graph.py
 
 from langgraph.graph import StateGraph
-from typing import TypedDict, List, Dict, Optional
+from typing import List, Dict, Optional
+from typing_extensions import TypedDict
 
 from fetch_news   import fetch_news
 from summarize    import analyze_articles_parallel, rank_and_diversify, generate_final_output, cheap_prefilter
