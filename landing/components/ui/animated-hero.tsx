@@ -75,7 +75,7 @@ function Hero() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.7, delay: 0.2 }}
             >
-              Everything you need, nothing you don't. Built by a developer for people who care about AI but don't have time to doomscroll tech Twitter. Your twice-daily 3-minute audio briefing, delivered straight to Telegram.
+              Feeling overwhelmed by how fast AI is changing? We cut out the noise and summarize the biggest daily updates into a quick 3-minute audio clip. Just open Telegram, hit play, and stay caught up effortlessly—perfect for your morning walk or commute.
             </motion.p>
           </div>
 

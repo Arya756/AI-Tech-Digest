@@ -56,7 +56,7 @@ export default function Home() {
         <FAQSection />
         <CTASection />
         <footer className="bg-gray-900 text-gray-400 text-sm text-center py-8">
-          <p>© 2026 AI Tech Digest · Built with ❤️ by Ayush Aryan</p>
+          <p>© 2026 AI Tech Digest · Built by Ayush Aryan</p>
           <p className="mt-1 text-gray-600">
             Free, open, and delivered daily via Telegram
           </p>
