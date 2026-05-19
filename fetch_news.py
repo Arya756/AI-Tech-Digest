@@ -15,6 +15,7 @@ MAX_AGE_BY_SOURCE = {
     "Microsoft AI Blog":  7,
     "Meta AI Engineering":7,
     "Anthropic Blog":     7,
+    "TensorFlow Blog":    7,
     "The Verge AI":       2,
     "Wired AI":           2,
     "MIT Tech Review":    3,
@@ -91,6 +92,12 @@ RSS_SOURCES = [
         "name":   "Hacker News AI",
         "weight": 1.3,
         "cap":    3,
+    },
+    {
+        "url":    "https://blog.tensorflow.org/feeds/posts/default",
+        "name":   "TensorFlow Blog",
+        "weight": 1.5,
+        "cap":    4,
     },
     {
         "url":    "https://arxiv.org/rss/cs.LG",

@@ -379,7 +379,12 @@ if __name__ == "__main__":
         sys.exit(0)
 
     # Resolve which digest file to read
-    target_date  = args.date or date.today().strftime("%Y-%m-%d")
+    if args.date:
+        target_date = args.date
+    else:
+        from zoneinfo import ZoneInfo
+        ist_now = datetime.now(ZoneInfo("Asia/Kolkata"))
+        target_date = f"{ist_now.strftime('%Y-%m-%d')}_{ist_now.strftime('%p')}"
     digest_file  = Path("digests") / f"digest_{target_date}_en.txt"
 
     if not digest_file.exists():

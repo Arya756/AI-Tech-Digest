@@ -21,7 +21,7 @@ from zoneinfo import ZoneInfo
 def ensure_digest_generated():
     """Ensure today's digest is generated (both EN and HI)."""
     ist_now = datetime.now(ZoneInfo("Asia/Kolkata"))
-    today = ist_now.strftime("%Y-%m-%d")
+    today = f"{ist_now.strftime('%Y-%m-%d')}_{ist_now.strftime('%p')}"
     txt_path_en = Path(f"digests/digest_{today}_en.txt")
     txt_path_hi = Path(f"digests/digest_{today}_hi.txt")
     
@@ -92,7 +92,7 @@ def hourly_job():
             return # Cannot proceed if digest is missing
             
         # Pre-generating the voice notes synchronously to prevent asyncio loop crashes
-        today = ist_now.strftime("%Y-%m-%d")
+        today = f"{ist_now.strftime('%Y-%m-%d')}_{ist_now.strftime('%p')}"
         from voice_engine import generate_voice_note
         
         # Generate English voice note if needed

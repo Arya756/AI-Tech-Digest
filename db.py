@@ -37,8 +37,12 @@ def remove_subscriber(chat_id: str):
     print(f"❌ Subscriber removed from DB: {chat_id}")
 
 def get_subscribers_by_time(delivery_time: str) -> list[dict]:
-    """Return a list of active subscribers scheduled for a specific time."""
-    subs = subscribers_collection.find({"active": True, "delivery_time": delivery_time})
+    """Return a list of active subscribers scheduled for a specific time or its 12-hour opposite."""
+    opposite_time = delivery_time.replace("AM", "PM") if "AM" in delivery_time else delivery_time.replace("PM", "AM")
+    subs = subscribers_collection.find({
+        "active": True, 
+        "delivery_time": {"$in": [delivery_time, opposite_time]}
+    })
     return [{"chat_id": sub["chat_id"], "language": sub.get("language", "en")} for sub in subs]
     
 def get_subscriber(chat_id: str) -> dict | None:

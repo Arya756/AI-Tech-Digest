@@ -30,7 +30,7 @@
 
 AI Tech Digest is a **production-grade autonomous news agent** built with LangGraph. Every day it:
 
-1. Pulls fresh articles from **11 high-signal RSS sources** (OpenAI Blog, Google AI, Meta AI, ArXiv, Hacker News, TechCrunch, and more)
+1. Pulls fresh articles from **12 high-signal RSS sources** (OpenAI Blog, Google AI, Microsoft AI, Meta AI, TensorFlow, ArXiv, Hacker News, TechCrunch, and more)
 2. Runs each article through an **LLM-powered scoring pipeline** — scoring innovation, impact, and credibility
 3. Selects the **Top 5 stories** with category-diversity enforcement (no single topic dominates)
 4. Translates the digest to **Hindi** using the same LLM
@@ -50,7 +50,7 @@ AI Tech Digest is a **production-grade autonomous news agent** built with LangGr
 │  │  NODE 1  │───▶│  NODE 2  │───▶│  NODE 3  │───▶│  NODE 4  │  │
 │  │  FETCH   │    │ ANALYZE  │    │   RANK   │    │  OUTPUT  │  │
 │  └──────────┘    └──────────┘    └──────────┘    └──────────┘  │
-│  11 RSS feeds   LLM scoring     Top-5 select    Format digest  │
+│  12 RSS feeds   LLM scoring     Top-5 select    Format digest  │
 │  Reddit API     Parallel exec   Category caps   Hindi translate │
 │  Dedup checks   22hr cache      Source limits                   │
 └─────────────────────────────────────────────────────────────────┘
@@ -67,7 +67,7 @@ AI Tech Digest is a **production-grade autonomous news agent** built with LangGr
 ┌─────────────────────────────────────────────────────────────────┐
 │                  Telegram Bot + Hourly Scheduler                  │
 │                                                                  │
-│   Scheduler wakes every hour (:00)                               │
+│   Scheduler wakes every hour at :30 UTC (aligns with :00 IST)   │
 │   ──▶ Finds subscribers for that hour                            │
 │   ──▶ Generates digest if not done yet (lazy init)               │
 │   ──▶ Sends text + voice in user's language                      │
@@ -90,7 +90,7 @@ AI Tech Digest is a **production-grade autonomous news agent** built with LangGr
 |---|---|---|
 | **AI Orchestration** | [LangGraph](https://github.com/langchain-ai/langgraph) | Stateful, multi-node AI pipeline |
 | **LLM** | [Groq API](https://groq.com/) — `llama-3.3-70b-versatile` | Article scoring, summarization, translation |
-| **RSS Parsing** | `feedparser` + `requests` | Fetching articles from 11 sources |
+| **RSS Parsing** | `feedparser` + `requests` | Fetching articles from 12 sources |
 | **Text-to-Speech** | [edge-tts](https://github.com/rany2/edge-tts) — Microsoft Neural | Voice briefings in EN & HI |
 | **Telegram** | [python-telegram-bot v22](https://python-telegram-bot.org/) | Delivery, bot commands, inline keyboards |
 | **Database** | [MongoDB](https://www.mongodb.com/) + PyMongo | Subscribers + deduplication ledger |
@@ -138,7 +138,7 @@ User visits landing page
 
 ```
 NODE 1: FETCH
-  ├─ Pull RSS from 11 sources in parallel
+  ├─ Pull RSS from 12 sources in parallel
   ├─ Apply age filters (lab blogs: 7 days, news: 2 days)
   ├─ Check MongoDB history (permanent dedup)
   ├─ Check title fingerprint (cross-source dedup)
@@ -173,7 +173,7 @@ NODE 4: OUTPUT
 Defines the LangGraph `StateGraph` with a shared `State` TypedDict that flows through all 4 nodes. Each node reads from and writes to this shared state, keeping the pipeline clean and testable in isolation.
 
 ### `fetch_news.py` — The Ingestion Layer
-- **11 RSS Sources** with per-source credibility weights (1.2x–1.8x) and daily caps
+- **12 RSS Sources** with per-source credibility weights (1.2x–1.8x) and daily caps
 - **Reddit Integration** via the JSON API, filtering posts by minimum upvote score (80+)
 - **Title Fingerprinting**: Strips stopwords, takes first 6 meaningful words to create a semantic key — catches the same story published on multiple outlets
 - **Age Filtering**: Lab blogs allowed up to 7 days old; news sites capped at 2 days
@@ -297,7 +297,7 @@ The voice engine produces two distinct audio styles:
 The scheduler architecture follows a **"Lazy Initialization"** model:
 
 ```
-Every Hour at :00
+Every Hour at :30 UTC (:00 IST)
 │
 ├── Query DB: subscribers with delivery_time = current_hour?
 │
@@ -363,6 +363,15 @@ All "Subscribe" buttons link directly to `https://t.me/aitechdigest_bot`.
   - Hid redundant CTA buttons in the mobile navbar, relying instead on the massive Hero CTA.
   - Forced flex containers to full width with explicit center alignments for the Hero buttons.
   - Locked the FAQ accordion components to a strict left-aligned text constraint to prevent them from inheriting parent centering rules.
+
+### 5. Server Timezone Shifts & On-Demand Delivery
+- **The Problem**: 
+  - Render servers default to UTC, causing the scheduler to wake up 5.5 hours late for Indian Standard Time (IST) users.
+  - Additionally, since the scheduler uses "lazy initialization" to save costs, the `/latest` command failed to retrieve today's news if there were no scheduled deliveries earlier that morning.
+- **The Solution**: 
+  - Configured `scheduler.py` to evaluate the current time and dates using the `ZoneInfo("Asia/Kolkata")` timezone.
+  - Adjusted the background execution from `:00` to `:30` past the hour to align the UTC checks perfectly with top-of-the-hour IST delivery times.
+  - Upgraded the `/latest` Telegram command to dynamically trigger `ensure_digest_generated()` on demand if the local text files are missing.
 
 ---
 

@@ -48,7 +48,10 @@ def main():
     print("═" * 60)
 
     # Save English digest
-    today      = date.today().strftime("%Y-%m-%d")
+    from zoneinfo import ZoneInfo
+    from datetime import datetime
+    ist_now = datetime.now(ZoneInfo("Asia/Kolkata"))
+    today = f"{ist_now.strftime('%Y-%m-%d')}_{ist_now.strftime('%p')}"
     output_dir = "digests"
     os.makedirs(output_dir, exist_ok=True)
     filepath_en   = os.path.join(output_dir, f"digest_{today}_en.txt")

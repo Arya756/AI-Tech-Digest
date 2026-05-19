@@ -53,7 +53,10 @@ BOT_TAGLINE = "Your daily 3-minute AI briefing. Read less, know more. 🎙️"
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _today() -> str:
-    return date.today().strftime("%Y-%m-%d")
+    from zoneinfo import ZoneInfo
+    from datetime import datetime
+    ist_now = datetime.now(ZoneInfo("Asia/Kolkata"))
+    return f"{ist_now.strftime('%Y-%m-%d')}_{ist_now.strftime('%p')}"
 
 
 def _digest_txt(date_str: str, lang: str = "en") -> Path:
@@ -238,7 +241,15 @@ async def send_digest(chat_id: str, date_str: str | None = None) -> bool:
         print("    Generating now...")
         from voice_engine import generate_voice_note
         voice_key = "hi-IN-MadhurNeural" if lang == "hi" else "ava"
-        generate_voice_note(digest_path=txt_path, date_str=date_str, voice_key=voice_key, output_dir="digests")
+        import asyncio
+        await asyncio.to_thread(
+            generate_voice_note,
+            articles=None,
+            digest_path=txt_path, 
+            output_dir="digests",
+            voice_key=voice_key,
+            date_str=date_str
+        )
 
     bot      = Bot(token=BOT_TOKEN)
     articles = _parse_digest_articles(txt_path)
@@ -265,11 +276,14 @@ async def send_digest(chat_id: str, date_str: str | None = None) -> bool:
     print("  → Uploading voice note...")
     with open(mp3_path, "rb") as audio_file:
         await bot.send_audio(
-            chat_id   = chat_id,
-            audio     = audio_file,
-            title     = f"AI Tech Digest — {date_str}",
-            performer = "AI Tech Digest",
-            caption   = "🎙️ Listen to today's full briefing",
+            chat_id       = chat_id,
+            audio         = audio_file,
+            title         = f"AI Tech Digest — {date_str}",
+            performer     = "AI Tech Digest",
+            caption       = "🎙️ Listen to today's full briefing",
+            read_timeout  = 60,
+            write_timeout = 60,
+            connect_timeout = 60
         )
     print("  ✅ Voice note sent")
     return True
