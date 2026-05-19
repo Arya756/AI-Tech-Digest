@@ -73,6 +73,8 @@ def main():
         )
         hi_response = llm_final.invoke([HumanMessage(content=translate_prompt)])
         digest_hi = hi_response.content
+        if not isinstance(digest_hi, str):
+            raise TypeError("Expected string output from llm_final")
         with open(filepath_hi, "w", encoding="utf-8") as f:
             f.write(digest_hi)
         print(f"💾 Hindi Digest saved to: {filepath_hi}")

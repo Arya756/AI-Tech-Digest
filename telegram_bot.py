@@ -321,7 +321,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     # Save initial subscriber with default active status
     from db import save_subscriber
-    save_subscriber(chat_id=chat_id, username=user.username)
+    save_subscriber(chat_id=str(chat_id), username=user.username)
 
     keyboard = [
         [
@@ -341,11 +341,11 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not update.callback_query:
+    if not update.callback_query or not update.effective_chat:
         return
     query = update.callback_query
     await query.answer()
-    chat_id = query.message.chat_id  # type: ignore[union-attr]
+    chat_id = str(update.effective_chat.id)
     data = query.data or ""
 
     from db import update_preference
@@ -394,7 +394,7 @@ async def cmd_stop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "Send /start anytime to resubscribe."
     )
     from db import remove_subscriber
-    remove_subscriber(chat_id=update.effective_chat.id)  # type: ignore[union-attr]
+    remove_subscriber(chat_id=str(update.effective_chat.id))
 
 
 async def cmd_latest(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

@@ -192,7 +192,10 @@ def _analyze_article(article: dict) -> dict | None:
     for attempt in range(4):   # up to 4 attempts per article
         try:
             response = llm.invoke(prompt)
-            parsed   = _safe_parse_json(response.content)
+            content_str = response.content
+            if not isinstance(content_str, str):
+                raise TypeError("Expected string response from LLM")
+            parsed   = _safe_parse_json(content_str)
 
             if parsed is None:
                 print(f"  ⚠️  JSON parse failed (attempt {attempt+1}): {article['title'][:55]}")

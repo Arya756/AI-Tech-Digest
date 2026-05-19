@@ -197,8 +197,16 @@ def _fetch_rss_source(source: dict, seen_ids: set, seen_fps: set) -> list[dict]:
                 continue
 
             import html as _html
-            title = _html.unescape(entry.get("title", "")).strip()
-            link  = entry.get("link",  "").strip()
+            entry_title = entry.get("title", "")
+            if not isinstance(entry_title, str):
+                entry_title = str(entry_title) if entry_title is not None else ""
+            title = _html.unescape(entry_title).strip()
+
+            entry_link = entry.get("link", "")
+            if not isinstance(entry_link, str):
+                entry_link = str(entry_link) if entry_link is not None else ""
+            link = entry_link.strip()
+
             if not title or not link:
                 continue
 
@@ -221,11 +229,21 @@ def _fetch_rss_source(source: dict, seen_ids: set, seen_fps: set) -> list[dict]:
                 continue
             seen_fps.add(fp)
 
-            content = (
-                entry.get("content", [{}])[0].get("value", "")
-                or entry.get("summary", "")
-                or ""
-            ).strip()
+            content_val = ""
+            entry_content = entry.get("content")
+            if isinstance(entry_content, list) and len(entry_content) > 0:
+                first_content = entry_content[0]
+                if isinstance(first_content, dict):
+                    content_val = first_content.get("value", "")
+            if not content_val:
+                summary_val = entry.get("summary", "")
+                if isinstance(summary_val, str):
+                    content_val = summary_val
+                elif summary_val is not None:
+                    content_val = str(summary_val)
+            if not isinstance(content_val, str):
+                content_val = str(content_val) if content_val is not None else ""
+            content = content_val.strip()
 
             age_str = _format_age(entry)
 

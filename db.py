@@ -12,9 +12,9 @@ subscribers_collection = db["subscribers"]
 def save_subscriber(chat_id: str, username: str | None = None):
     """Save a new subscriber or update existing one."""
     subscribers_collection.update_one(
-        {"chat_id": str(chat_id)},
+        {"chat_id": chat_id},
         {
-            "$set":         {"chat_id": str(chat_id), "username": username, "active": True},
+            "$set":         {"chat_id": chat_id, "username": username, "active": True},
             "$setOnInsert": {"language": "en", "delivery_time": "08:00 AM"},  # sensible defaults for new users
         },
         upsert=True
@@ -24,14 +24,14 @@ def save_subscriber(chat_id: str, username: str | None = None):
 def update_preference(chat_id: str, key: str, value: str):
     """Update a specific preference (e.g., language or delivery_time)."""
     subscribers_collection.update_one(
-        {"chat_id": str(chat_id)},
+        {"chat_id": chat_id},
         {"$set": {key: value}}
     )
 
 def remove_subscriber(chat_id: str):
     """Mark a subscriber as inactive."""
     subscribers_collection.update_one(
-        {"chat_id": str(chat_id)},
+        {"chat_id": chat_id},
         {"$set": {"active": False}}
     )
     print(f"❌ Subscriber removed from DB: {chat_id}")
@@ -47,7 +47,7 @@ def get_subscribers_by_time(delivery_time: str) -> list[dict]:
     
 def get_subscriber(chat_id: str) -> dict | None:
     """Get a single subscriber."""
-    return subscribers_collection.find_one({"chat_id": str(chat_id)})
+    return subscribers_collection.find_one({"chat_id": chat_id})
 
 # ─────────────────────────────────────────────────────────────────────────────
 # ARTICLE HISTORY
