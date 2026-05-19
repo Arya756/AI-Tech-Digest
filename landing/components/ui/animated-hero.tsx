@@ -75,7 +75,7 @@ function Hero() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.7, delay: 0.2 }}
             >
-              Everything you need, nothing you don't. Built by a developer for people who care about AI but don't have time to doomscroll tech Twitter. Your daily 3-minute audio briefing, delivered straight to Telegram.
+              Everything you need, nothing you don't. Built by a developer for people who care about AI but don't have time to doomscroll tech Twitter. Your twice-daily 3-minute audio briefing, delivered straight to Telegram.
             </motion.p>
           </div>
 

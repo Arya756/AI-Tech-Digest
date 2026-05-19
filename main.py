@@ -10,7 +10,6 @@ if not (sys.base_prefix != sys.prefix):
 
 import os
 import sys
-from datetime import date
 from pathlib import Path
 from graph import graph
 
@@ -60,27 +59,25 @@ def main():
         f.write(digest)
     print(f"\n💾 English Digest saved to: {filepath_en}")
 
-    # Generate Hindi digest
-    from llm import llm_final
-    from langchain_core.messages import HumanMessage
-    
-    print("🌍 Translating digest to Hindi...")
-    translate_prompt = (
-        "Translate the following tech news digest into Hindi. "
-        "Keep the emojis, numbers, and formatting exactly the same. "
-        "Do not translate company names or proper nouns (like 'Google', 'AI', 'Apple'). "
-        "Ensure the Hindi flows naturally.\n\n"
-        f"{digest}"
-    )
-    
-    hi_response = llm_final.invoke([HumanMessage(content=translate_prompt)])
-    digest_hi = hi_response.content
-    
     filepath_hi = os.path.join(output_dir, f"digest_{today}_hi.txt")
-    with open(filepath_hi, "w", encoding="utf-8") as f:
-        f.write(digest_hi)
-        
-    print(f"💾 Hindi Digest saved to: {filepath_hi}")
+    if not os.path.exists(filepath_hi):
+        from llm import llm_final
+        from langchain_core.messages import HumanMessage
+        print("🌍 Translating digest to Hindi...")
+        translate_prompt = (
+            "Translate the following tech news digest into Hindi. "
+            "Keep the emojis, numbers, and formatting exactly the same. "
+            "Do not translate company names or proper nouns (like 'Google', 'AI', 'Apple'). "
+            "Ensure the Hindi flows naturally.\n\n"
+            f"{digest}"
+        )
+        hi_response = llm_final.invoke([HumanMessage(content=translate_prompt)])
+        digest_hi = hi_response.content
+        with open(filepath_hi, "w", encoding="utf-8") as f:
+            f.write(digest_hi)
+        print(f"💾 Hindi Digest saved to: {filepath_hi}")
+    else:
+        print(f"ℹ️ Hindi Digest already exists: {filepath_hi}")
     
     return digest
 

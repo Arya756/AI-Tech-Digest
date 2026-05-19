@@ -26,7 +26,7 @@ import os
 import sys
 import asyncio
 import argparse
-from datetime import date
+from datetime import date  # kept for any legacy references
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -245,10 +245,11 @@ async def send_digest(chat_id: str, date_str: str | None = None) -> bool:
         await asyncio.to_thread(
             generate_voice_note,
             articles=None,
-            digest_path=txt_path, 
+            digest_path=txt_path,
             output_dir="digests",
             voice_key=voice_key,
-            date_str=date_str
+            date_str=date_str,
+            lang=lang,
         )
 
     bot      = Bot(token=BOT_TOKEN)
@@ -370,9 +371,16 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     elif data.startswith("time_"):
         time = data[len("time_"):]  # prefix strip — safe even if value contains underscores
         update_preference(chat_id, "delivery_time", time)
-        
+
+        # Calculate the PM counterpart so users know about the evening edition
+        pm_time = time.replace("AM", "PM")
         await query.edit_message_text(
-            text=f"✅ All set! You will receive your digest daily at {time}."
+            text=(
+                f"✅ All set! You will receive your AI Tech Digest twice daily:\n\n"
+                f"🌅 Morning: {time}\n"
+                f"🌆 Evening: {pm_time}\n\n"
+                f"Each edition brings fresh, non-repeating stories!"
+            )
         )
 
 
@@ -380,10 +388,10 @@ async def cmd_stop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /stop — unsubscribe."""
     if not update.message or not update.effective_chat:
         return
+    # Use plain text to avoid MarkdownV2 escaping issues with apostrophes
     await update.message.reply_text(
-        "😢 You've been unsubscribed\\. You won't receive any more digests\\.\n"
-        "Send /start anytime to resubscribe\\.",
-        parse_mode=ParseMode.MARKDOWN_V2,
+        "😢 You've been unsubscribed. You won't receive any more digests.\n"
+        "Send /start anytime to resubscribe."
     )
     from db import remove_subscriber
     remove_subscriber(chat_id=update.effective_chat.id)  # type: ignore[union-attr]

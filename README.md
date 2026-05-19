@@ -1,8 +1,8 @@
 # AI Tech Digest Agent
 
-> **Your daily 3-minute AI briefing. Read less, know more. 🎙️**
+> **Your twice-daily 3-minute AI briefing. Read less, know more. 🎙️**
 >
-> A fully autonomous AI agent that fetches, ranks, summarizes, and delivers the top 5 AI tech stories of the day — as a formatted Telegram message and a human-quality voice briefing — in English or Hindi.
+> A fully autonomous AI agent that fetches, ranks, summarizes, and delivers the top 5 AI tech stories — as a formatted Telegram message and a human-quality voice briefing — in English or Hindi, twice a day.
 
 ---
 
@@ -35,7 +35,7 @@ AI Tech Digest is a **production-grade autonomous news agent** built with LangGr
 3. Selects the **Top 5 stories** with category-diversity enforcement (no single topic dominates)
 4. Translates the digest to **Hindi** using the same LLM
 5. Generates **human-quality voice briefings** in both English (Ava Neural) and Hindi (Madhur Neural)
-6. Delivers the text digest + audio to each subscriber on **Telegram** at their chosen time
+6. Delivers the text digest + audio to each subscriber on **Telegram** twice a day (AM and PM cycle)
 7. **Never repeats** a story — permanently tracking every sent article via MongoDB
 
 ---
@@ -59,8 +59,8 @@ AI Tech Digest is a **production-grade autonomous news agent** built with LangGr
 ┌─────────────────────────────────────────────────────────────────┐
 │                      Voice Engine (edge-tts)                     │
 │                                                                  │
-│   EN Digest (.txt) ──▶ Ava Neural ──▶ digest_YYYY-MM-DD_en.mp3 │
-│   HI Digest (.txt) ──▶ Madhur Neural ─▶ digest_YYYY-MM-DD_hi.mp3│
+│   EN Digest (.txt) ──▶ Ava Neural ──▶ digest_YYYY-MM-DD_AM_en.mp3│
+│   HI Digest (.txt) ──▶ Madhur Neural ─▶ digest_YYYY-MM-DD_AM_hi.mp3│
 └─────────────────────────────────────────────────────────────────┘
               │
               ▼
@@ -115,7 +115,7 @@ User visits landing page
   ──▶ User taps language → saved to DB
   ──▶ Bot presents time choice: [07:00 AM] [08:00 AM] [09:00 AM]
   ──▶ User taps time → saved to DB
-  ──▶ "✅ All set! You'll receive your digest daily at 08:00 AM"
+  ──▶ "✅ All set! You'll receive your AI Tech Digest twice daily: Morning at 08:00 AM, Evening at 08:00 PM."
 ```
 
 ### Step 2 — Scheduler Wakes Up (Every Hour)
@@ -134,7 +134,7 @@ User visits landing page
       → Sleep 1 second (rate limit protection)
 ```
 
-### Step 3 — LangGraph Pipeline (Runs Once Per Day)
+### Step 3 — LangGraph Pipeline (Runs Twice Per Day)
 
 ```
 NODE 1: FETCH

@@ -60,19 +60,16 @@ def analyze_node(state: State) -> State:
 
     for art in raw:
         cached = get_cached_result(art["id"])
-        if cached is None and art["id"] not in [a["id"] for a in to_process]:
-            # None means "not in cache" OR "was cached as rejected"
-            # We differentiate: get_cached_result returns {} sentinel for rejected
-            cached_entry = get_cached_result(art["id"])
-            if cached_entry == {}:
-                print(f"  💾 CACHE-REJECTED: {art['title'][:60]}")
-            else:
-                to_process.append(art)
-        elif cached is not None:
-            if cached:  # non-empty = was kept
-                cached_results.append(cached)
-                print(f"  💾 CACHE-HIT: {art['title'][:60]}")
-            # empty dict = was rejected, skip
+        if cached is None:
+            # Not in cache at all — needs LLM processing
+            to_process.append(art)
+        elif cached:
+            # Non-empty dict = article was previously kept
+            cached_results.append(cached)
+            print(f"  💾 CACHE-HIT: {art['title'][:60]}")
+        else:
+            # Empty dict {{}} = article was previously rejected — skip silently
+            print(f"  💾 CACHE-REJECTED: {art['title'][:60]}")
 
     print(f"\n  📦 {len(cached_results)} from cache | {len(to_process)} new to process")
 

@@ -292,6 +292,16 @@ def _fetch_reddit_source(source: dict, seen_ids: set, seen_fps: set) -> list[dic
             seen_ids.add(uid)
 
             fp = _title_fingerprint(title)
+
+            # Check MongoDB history (same as RSS fetcher — prevents PM re-sends)
+            try:
+                from db import is_article_sent
+                if is_article_sent(link, fp):
+                    print(f"  🔁 ALREADY SENT skipped: {title[:55]}")
+                    continue
+            except Exception:
+                pass
+
             if fp in seen_fps:
                 print(f"  🔁 NEAR-DUP skipped: {title[:55]}")
                 continue

@@ -19,8 +19,8 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './
 const features = [
   {
     icon: Rss,
-    title: "9 High-Signal Sources",
-    desc: "Pulls from OpenAI, Google AI, Meta AI, Microsoft, ArXiv, Hacker News, and more — filtered and weighted by credibility.",
+    title: "12 High-Signal Sources",
+    desc: "Pulls from OpenAI, Google AI, Meta AI, Microsoft, TensorFlow, ArXiv, Hacker News, and more — filtered and weighted by credibility.",
     color: "bg-orange-50 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400",
   },
   {
@@ -49,8 +49,8 @@ const features = [
   },
   {
     icon: Clock,
-    title: "Your Time, Your Language",
-    desc: "Pick your delivery time (7, 8, or 9 AM) and language (English or Hindi) on first launch. The bot remembers your preferences forever.",
+    title: "Twice-Daily Delivery",
+    desc: "Pick your morning delivery time (7, 8, or 9 AM). We automatically generate a fresh evening edition 12 hours later so you're always caught up.",
     color: "bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400",
   },
 ];
@@ -96,9 +96,9 @@ export function FeaturesSection() {
           {/* Card 1: Tall (Span 2 rows) */}
           <FadeInSection className="md:col-span-1 md:row-span-2 h-full" delay={0}>
             <div className="h-full bg-[#f3f0fe] dark:bg-purple-900/10 rounded-[2rem] p-8 relative overflow-hidden border border-purple-100/50 dark:border-purple-800/30 flex flex-col transition-transform hover:-translate-y-1">
-              <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">9 High-Signal Sources</h3>
+              <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">12 High-Signal Sources</h3>
               <p className="text-gray-600 dark:text-gray-400 text-sm leading-relaxed relative z-10">
-                Pulls from OpenAI, Google AI, Meta AI, Microsoft, ArXiv, Hacker News, and more — filtered and weighted by credibility.
+                Pulls from OpenAI, Google AI, Meta AI, Microsoft, TensorFlow, ArXiv, Hacker News, and more — filtered and weighted by credibility.
               </p>
               <div className="mt-auto pt-16 flex justify-center">
                  <Rss className="w-32 h-32 text-purple-200 dark:text-purple-800/40 relative z-0" />
@@ -149,7 +149,7 @@ export function FeaturesSection() {
               <div className="flex-1 relative z-10">
                 <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">Delivered on Telegram</h3>
                 <p className="text-gray-600 dark:text-gray-400 text-sm leading-relaxed max-w-sm">
-                  Formatted text message with Read More links + a voice note. All in one place, every morning.
+                  Formatted text message with Read More links + a voice note. Delivered twice daily (AM and PM) directly to you.
                 </p>
               </div>
               <div className="shrink-0 relative">
@@ -161,9 +161,9 @@ export function FeaturesSection() {
           {/* Card 6: Square */}
           <FadeInSection className="md:col-span-1 md:row-span-1 h-full" delay={0.5}>
             <div className="h-full bg-[#eff2f6] dark:bg-slate-800/20 rounded-[2rem] p-8 relative overflow-hidden border border-slate-200/50 dark:border-slate-700/50 flex flex-col transition-transform hover:-translate-y-1">
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3 relative z-10">Your Time, Your Language</h3>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3 relative z-10">Twice-Daily Editions</h3>
               <p className="text-gray-600 dark:text-gray-400 text-sm leading-relaxed relative z-10">
-                Pick 7, 8, or 9 AM delivery and English or Hindi on first launch.
+                Pick your morning slot (7, 8, or 9 AM). The bot automatically sends a fresh PM edition exactly 12 hours later.
               </p>
               <Clock className="absolute -bottom-6 -right-4 w-28 h-28 text-slate-200 dark:text-slate-700/50" />
             </div>
@@ -178,7 +178,7 @@ const steps = [
   {
     step: "01",
     title: "We fetch the news",
-    desc: "Every day, we pull fresh articles from 9 top AI sources — research labs, tech journalism, and community signals.",
+    desc: "Twice a day, we pull fresh articles from 12 top AI sources — research labs, tech journalism, and community signals.",
     icon: Globe,
     iconBg: "bg-emerald-100 dark:bg-emerald-900/50",
     iconBorder: "border-emerald-400 dark:border-emerald-500",
@@ -383,11 +383,11 @@ const faqs = [
   },
   {
     q: "What time will I receive the digest?",
-    a: "You choose! When you first start the bot, you can pick 7:00 AM, 8:00 AM, or 9:00 AM as your daily delivery time. You can also choose between English and Hindi.",
+    a: "You receive it twice a day! When you start the bot, you pick a morning slot (7:00, 8:00, or 9:00 AM). The bot will send your morning edition then, and a fresh evening edition exactly 12 hours later (7:00, 8:00, or 9:00 PM).",
   },
   {
     q: "What sources does it pull from?",
-    a: "OpenAI Blog, Google AI Blog, Microsoft AI, Meta AI Engineering, ArXiv ML, Hacker News, VentureBeat AI, TechCrunch AI, and Ars Technica.",
+    a: "OpenAI Blog, Google AI, Microsoft AI, Meta AI, TensorFlow, Anthropic, The Verge, Wired, TechCrunch, VentureBeat, Ars Technica, ArXiv ML, and Hacker News.",
   },
   {
     q: "What languages are supported?",

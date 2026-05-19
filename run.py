@@ -17,7 +17,10 @@ def run_scheduler():
     schedule.every().hour.at(":30").do(hourly_job)
     
     while True:
-        schedule.run_pending()
+        try:
+            schedule.run_pending()
+        except Exception as e:
+            print(f"❌ Scheduler error: {e}")
         time.sleep(30)
 
 def run_health_check_server():

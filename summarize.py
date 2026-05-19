@@ -395,9 +395,10 @@ def _priority_tag(score: float) -> str:
 
 def generate_final_output(top_articles: list[dict]) -> str:
     """Build the formatted digest string from pre-analyzed articles."""
-    from datetime import date
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
 
-    today = date.today().strftime("%B %d, %Y")
+    today = datetime.now(ZoneInfo("Asia/Kolkata")).strftime("%B %d, %Y")
     lines = [f"🔥 DAILY TECH DIGEST — {today}\n", "=" * 50 + "\n"]
 
     for i, art in enumerate(top_articles, 1):

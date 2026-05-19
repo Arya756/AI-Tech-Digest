@@ -284,6 +284,7 @@ def generate_voice_note(
     output_dir:  str               = "digests",
     voice_key:   str               = DEFAULT_VOICE,
     date_str:    str | None        = None,
+    lang:        str               = "en",
 ) -> Path:
     """
     Main entry point.
@@ -300,11 +301,11 @@ def generate_voice_note(
     # Build the spoken script
     if articles is not None:
         print("  📝 Building script from article data...")
-        script = build_script_from_articles(articles, script_date=today)
+        script = build_script_from_articles(articles, script_date=today, lang=lang)
     elif digest_path is not None:
         print(f"  📝 Building script from {digest_path.name}...")
-        lang = "hi" if str(digest_path).endswith("_hi.txt") else "en"
-        script = build_script_from_digest_file(digest_path, lang=lang)
+        detected_lang = "hi" if str(digest_path).endswith("_hi.txt") else "en"
+        script = build_script_from_digest_file(digest_path, lang=detected_lang)
     else:
         raise ValueError("Provide either `articles` or `digest_path`.")
 
