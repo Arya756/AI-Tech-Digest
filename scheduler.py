@@ -16,14 +16,17 @@ from main import main as run_pipeline
 from telegram_bot import send_digest
 from db import get_subscribers_by_time
 
+from zoneinfo import ZoneInfo
+
 def ensure_digest_generated():
     """Ensure today's digest is generated (both EN and HI)."""
-    today = datetime.now().strftime("%Y-%m-%d")
+    ist_now = datetime.now(ZoneInfo("Asia/Kolkata"))
+    today = ist_now.strftime("%Y-%m-%d")
     txt_path_en = Path(f"digests/digest_{today}_en.txt")
     txt_path_hi = Path(f"digests/digest_{today}_hi.txt")
     
     if not txt_path_en.exists() or not txt_path_hi.exists():
-        print(f"\n[{datetime.now()}] ⏰ Generating daily digest...")
+        print(f"\n[{ist_now}] ⏰ Generating daily digest...")
         run_pipeline()
         
     # Clean up old files to save disk space
@@ -54,7 +57,8 @@ async def send_to_time(delivery_time: str):
     if not subscribers:
         return
 
-    print(f"\n[{datetime.now()}] 🚀 Broadcasting digest to {len(subscribers)} subscribers for {delivery_time}...")
+    ist_now = datetime.now(ZoneInfo("Asia/Kolkata"))
+    print(f"\n[{ist_now}] 🚀 Broadcasting digest to {len(subscribers)} subscribers for {delivery_time}...")
     
     for sub in subscribers:
         chat_id = sub["chat_id"]
@@ -70,10 +74,12 @@ async def send_to_time(delivery_time: str):
         # Add a small delay to avoid hitting Telegram rate limits
         await asyncio.sleep(1)
         
-    print(f"[{datetime.now()}] 🎉 Broadcast for {delivery_time} complete!")
+    ist_now = datetime.now(ZoneInfo("Asia/Kolkata"))
+    print(f"[{ist_now}] 🎉 Broadcast for {delivery_time} complete!")
 
 def hourly_job():
-    current_time = datetime.now().strftime("%I:00 %p")  # "07:00 AM", "08:00 AM" etc.
+    ist_now = datetime.now(ZoneInfo("Asia/Kolkata"))
+    current_time = ist_now.strftime("%I:00 %p")  # "07:00 AM", "08:00 AM" etc.
     
     # Get subscribers for this hour
     subscribers = get_subscribers_by_time(current_time)
@@ -86,7 +92,7 @@ def hourly_job():
             return # Cannot proceed if digest is missing
             
         # Pre-generating the voice notes synchronously to prevent asyncio loop crashes
-        today = datetime.now().strftime("%Y-%m-%d")
+        today = ist_now.strftime("%Y-%m-%d")
         from voice_engine import generate_voice_note
         
         # Generate English voice note if needed
@@ -94,7 +100,7 @@ def hourly_job():
         mp3_path_en = Path(f"digests/digest_{today}_en.mp3")
         if txt_path_en.exists() and not mp3_path_en.exists():
             try:
-                print(f"[{datetime.now()}] 🎙️ Pre-generating English voice note...")
+                print(f"[{ist_now}] 🎙️ Pre-generating English voice note...")
                 generate_voice_note(digest_path=txt_path_en, date_str=today, voice_key="ava", output_dir="digests")
             except Exception as e:
                 print(f"⚠️ Failed to pre-generate English audio: {e}")
@@ -104,7 +110,7 @@ def hourly_job():
         mp3_path_hi = Path(f"digests/digest_{today}_hi.mp3")
         if txt_path_hi.exists() and not mp3_path_hi.exists():
             try:
-                print(f"[{datetime.now()}] 🎙️ Pre-generating Hindi voice note...")
+                print(f"[{ist_now}] 🎙️ Pre-generating Hindi voice note...")
                 generate_voice_note(digest_path=txt_path_hi, date_str=today, voice_key="hi-IN-MadhurNeural", output_dir="digests")
             except Exception as e:
                 print(f"⚠️ Failed to pre-generate Hindi audio: {e}")
@@ -115,8 +121,8 @@ def hourly_job():
 if __name__ == "__main__":
     print("🚀 Hourly Scheduler started! Waiting for delivery windows...")
     
-    # Schedule the job to run at the start of every hour
-    schedule.every().hour.at(":00").do(hourly_job)
+    # Schedule the job to run at the start of every IST hour (which is :30 UTC)
+    schedule.every().hour.at(":30").do(hourly_job)
     
     # For testing purposes:
     # hourly_job()

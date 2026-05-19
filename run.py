@@ -13,8 +13,8 @@ from scheduler import hourly_job
 def run_scheduler():
     """Runs the scheduler loop in a separate thread."""
     print("🚀 Starting background scheduler thread...")
-    # Schedule the job to run at the start of every hour
-    schedule.every().hour.at(":00").do(hourly_job)
+    # Schedule the job to run at the start of every IST hour (which is :30 UTC)
+    schedule.every().hour.at(":30").do(hourly_job)
     
     while True:
         schedule.run_pending()

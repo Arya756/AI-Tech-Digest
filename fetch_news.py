@@ -271,6 +271,10 @@ def _fetch_reddit_source(source: dict, seen_ids: set, seen_fps: set) -> list[dic
                 continue
 
             title = data.get("title", "").strip()
+            # Clean Reddit tags like [P], [R], [D], etc.
+            import re
+            title = re.sub(r"\[.*?\]", "", title).strip()
+            
             link  = data.get("url",   "").strip()
             if not title or not link:
                 continue
@@ -290,7 +294,7 @@ def _fetch_reddit_source(source: dict, seen_ids: set, seen_fps: set) -> list[dic
 
             articles.append({
                 "id":            uid,
-                "title":         f"[{score}⬆] {title}",
+                "title":         title,
                 "link":          link,
                 "summary":       content[:1000],
                 "source":        source["name"],

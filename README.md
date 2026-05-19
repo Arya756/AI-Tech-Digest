@@ -1,4 +1,4 @@
-# 🔥 AI Tech Digest Agent
+# AI Tech Digest Agent
 
 > **Your daily 3-minute AI briefing. Read less, know more. 🎙️**
 >
@@ -6,7 +6,7 @@
 
 ---
 
-## 📋 Table of Contents
+## Table of Contents
 
 1. [Project Overview](#project-overview)
 2. [Architecture](#architecture)
