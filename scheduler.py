@@ -121,8 +121,8 @@ def hourly_job():
 if __name__ == "__main__":
     print("🚀 Hourly Scheduler started! Waiting for delivery windows...")
     
-    # Schedule the job to run at the start of every IST hour (which is :30 UTC)
-    schedule.every().hour.at(":30").do(hourly_job)
+    # Schedule the job to run at the start of every hour
+    schedule.every().hour.at(":00").do(hourly_job)
     
     # For testing purposes:
     # hourly_job()

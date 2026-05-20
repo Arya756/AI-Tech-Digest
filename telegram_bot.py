@@ -317,11 +317,12 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user    = update.effective_user
     chat_id = update.effective_chat.id
 
-    print(f"  👋 New subscriber: {user.username} ({chat_id})")
+    display_name = user.username or user.first_name
+    print(f"  👋 New subscriber: {display_name} ({chat_id})")
 
     # Save initial subscriber with default active status
     from db import save_subscriber
-    save_subscriber(chat_id=str(chat_id), username=user.username)
+    save_subscriber(chat_id=str(chat_id), username=display_name)
 
     keyboard = [
         [
