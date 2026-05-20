@@ -25,6 +25,26 @@ def ensure_digest_generated():
     txt_path_en = Path(f"digests/digest_{today}_en.txt")
     txt_path_hi = Path(f"digests/digest_{today}_hi.txt")
     
+    if not txt_path_en.exists():
+        try:
+            from db import load_digest_text
+            content = load_digest_text(today, "en")
+            if content:
+                txt_path_en.parent.mkdir(exist_ok=True)
+                txt_path_en.write_text(content, encoding="utf-8")
+        except Exception as e:
+            print(f"⚠️ DB load error EN: {e}")
+            
+    if not txt_path_hi.exists():
+        try:
+            from db import load_digest_text
+            content = load_digest_text(today, "hi")
+            if content:
+                txt_path_hi.parent.mkdir(exist_ok=True)
+                txt_path_hi.write_text(content, encoding="utf-8")
+        except Exception as e:
+            print(f"⚠️ DB load error HI: {e}")
+
     if not txt_path_en.exists() or not txt_path_hi.exists():
         print(f"\n[{ist_now}] ⏰ Generating daily digest...")
         run_pipeline()
@@ -36,6 +56,12 @@ def ensure_digest_generated():
 
 def _cleanup_old_digests(days: int = 7):
     """Delete digest files older than the specified number of days."""
+    try:
+        from db import delete_old_digests
+        delete_old_digests(days)
+    except Exception as e:
+        print(f"⚠️ DB cleanup failed: {e}")
+        
     try:
         cutoff = time.time() - (days * 86400)
         digest_dir = Path("digests")
@@ -100,20 +126,42 @@ def hourly_job():
         mp3_path_en = Path(f"digests/digest_{today}_en.mp3")
         if txt_path_en.exists() and not mp3_path_en.exists():
             try:
-                print(f"[{ist_now}] 🎙️ Pre-generating English voice note...")
-                generate_voice_note(digest_path=txt_path_en, date_str=today, voice_key="ava", output_dir="digests")
+                from db import load_digest_mp3
+                mp3_bytes = load_digest_mp3(today, "en")
+                if mp3_bytes:
+                    mp3_path_en.write_bytes(mp3_bytes)
             except Exception as e:
-                print(f"⚠️ Failed to pre-generate English audio: {e}")
+                pass
+                
+            if not mp3_path_en.exists():
+                try:
+                    print(f"[{ist_now}] 🎙️ Pre-generating English voice note...")
+                    generate_voice_note(digest_path=txt_path_en, date_str=today, voice_key="ava", output_dir="digests")
+                    from db import save_digest_mp3
+                    save_digest_mp3(today, "en", mp3_path_en.read_bytes())
+                except Exception as e:
+                    print(f"⚠️ Failed to pre-generate English audio: {e}")
                 
         # Generate Hindi voice note if needed
         txt_path_hi = Path(f"digests/digest_{today}_hi.txt")
         mp3_path_hi = Path(f"digests/digest_{today}_hi.mp3")
         if txt_path_hi.exists() and not mp3_path_hi.exists():
             try:
-                print(f"[{ist_now}] 🎙️ Pre-generating Hindi voice note...")
-                generate_voice_note(digest_path=txt_path_hi, date_str=today, voice_key="hi-IN-MadhurNeural", output_dir="digests")
+                from db import load_digest_mp3
+                mp3_bytes = load_digest_mp3(today, "hi")
+                if mp3_bytes:
+                    mp3_path_hi.write_bytes(mp3_bytes)
             except Exception as e:
-                print(f"⚠️ Failed to pre-generate Hindi audio: {e}")
+                pass
+
+            if not mp3_path_hi.exists():
+                try:
+                    print(f"[{ist_now}] 🎙️ Pre-generating Hindi voice note...")
+                    generate_voice_note(digest_path=txt_path_hi, date_str=today, voice_key="hi-IN-MadhurNeural", output_dir="digests")
+                    from db import save_digest_mp3
+                    save_digest_mp3(today, "hi", mp3_path_hi.read_bytes())
+                except Exception as e:
+                    print(f"⚠️ Failed to pre-generate Hindi audio: {e}")
         
         # Broadcast the result
         asyncio.run(send_to_time(current_time))

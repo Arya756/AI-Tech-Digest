@@ -59,6 +59,12 @@ def main():
         f.write(digest)
     print(f"\n💾 English Digest saved to: {filepath_en}")
 
+    try:
+        from db import save_digest_text
+        save_digest_text(today, "en", digest)
+    except Exception as e:
+        print(f"⚠️ Could not save English text digest to DB: {e}")
+
     filepath_hi = os.path.join(output_dir, f"digest_{today}_hi.txt")
     if not os.path.exists(filepath_hi):
         from llm import llm_final
@@ -78,6 +84,11 @@ def main():
         with open(filepath_hi, "w", encoding="utf-8") as f:
             f.write(digest_hi)
         print(f"💾 Hindi Digest saved to: {filepath_hi}")
+        try:
+            from db import save_digest_text
+            save_digest_text(today, "hi", digest_hi)
+        except Exception as e:
+            print(f"⚠️ Could not save Hindi text digest to DB: {e}")
     else:
         print(f"ℹ️ Hindi Digest already exists: {filepath_hi}")
     

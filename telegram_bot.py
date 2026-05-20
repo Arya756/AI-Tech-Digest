@@ -232,9 +232,28 @@ async def send_digest(chat_id: str, date_str: str | None = None) -> bool:
     mp3_path   = _digest_mp3(date_str, lang=lang)
 
     if not txt_path.exists():
+        try:
+            from db import load_digest_text
+            content = load_digest_text(date_str, lang)
+            if content:
+                txt_path.parent.mkdir(exist_ok=True)
+                txt_path.write_text(content, encoding="utf-8")
+        except Exception as e:
+            print(f"⚠️ DB load error for text: {e}")
+            
+    if not txt_path.exists():
         print(f"❌  Digest text not found: {txt_path}")
         print("    Run `python3 main.py` first.")
         return False
+
+    if not mp3_path.exists():
+        try:
+            from db import load_digest_mp3
+            mp3_bytes = load_digest_mp3(date_str, lang)
+            if mp3_bytes:
+                mp3_path.write_bytes(mp3_bytes)
+        except Exception as e:
+            print(f"⚠️ DB load error for mp3: {e}")
 
     if not mp3_path.exists():
         print(f"⚠️   Voice note not found: {mp3_path}")

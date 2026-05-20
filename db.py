@@ -71,3 +71,67 @@ def is_article_sent(link: str, fingerprint: str | None = None) -> bool:
     if fingerprint:
         query.append({"fingerprint": fingerprint})
     return history_collection.find_one({"$or": query}) is not None
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DIGEST PERSISTENCE (GridFS + Documents)
+# ─────────────────────────────────────────────────────────────────────────────
+import gridfs
+import time
+
+digests_collection = db["daily_digests"]
+fs = gridfs.GridFS(db, collection="digest_audio")
+
+def save_digest_text(date_str: str, lang: str, content: str):
+    """Save the text digest into MongoDB."""
+    digests_collection.update_one(
+        {"date_str": date_str, "lang": lang},
+        {
+            "$set": {
+                "date_str": date_str,
+                "lang": lang,
+                "content": content,
+                "created_at": time.time()
+            }
+        },
+        upsert=True
+    )
+    print(f"✅ Text digest saved to DB: {date_str} ({lang})")
+
+def load_digest_text(date_str: str, lang: str) -> str | None:
+    """Load the text digest from MongoDB."""
+    doc = digests_collection.find_one({"date_str": date_str, "lang": lang})
+    return doc["content"] if doc else None
+
+def save_digest_mp3(date_str: str, lang: str, mp3_bytes: bytes):
+    """Save the MP3 voice note into MongoDB via GridFS."""
+    filename = f"digest_{date_str}_{lang}.mp3"
+    
+    # Delete old file with same name if it exists (GridFS doesn't upsert directly)
+    existing = fs.find_one({"filename": filename})
+    if existing:
+        fs.delete(existing._id)
+        
+    fs.put(mp3_bytes, filename=filename, created_at=time.time())
+    print(f"✅ MP3 digest saved to DB: {filename}")
+
+def load_digest_mp3(date_str: str, lang: str) -> bytes | None:
+    """Load the MP3 voice note from MongoDB via GridFS."""
+    filename = f"digest_{date_str}_{lang}.mp3"
+    doc = fs.find_one({"filename": filename})
+    return doc.read() if doc else None
+
+def delete_old_digests(days: int = 7):
+    """Delete digests and MP3s older than the specified number of days."""
+    cutoff = time.time() - (days * 86400)
+    
+    # Delete from text collection
+    res = digests_collection.delete_many({"created_at": {"$lt": cutoff}})
+    
+    # Delete from GridFS
+    count = 0
+    for file in fs.find({"created_at": {"$lt": cutoff}}):
+        fs.delete(file._id)
+        count += 1
+        
+    if res.deleted_count > 0 or count > 0:
+        print(f"🧹 Cleaned up DB: {res.deleted_count} texts, {count} MP3s deleted.")

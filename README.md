@@ -66,8 +66,8 @@ AI Tech Digest is a **production-grade autonomous news agent** built with LangGr
               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                  Telegram Bot + Hourly Scheduler                  │
-│                                                                  │
-│   Scheduler wakes every hour at :30 UTC (aligns with :00 IST)   │
+│                                                                 │
+│   Scheduler wakes every hour at the top of the hour (:00)       │
 │   ──▶ Finds subscribers for that hour                            │
 │   ──▶ Generates digest if not done yet (lazy init)               │
 │   ──▶ Sends text + voice in user's language                      │
@@ -75,10 +75,12 @@ AI Tech Digest is a **production-grade autonomous news agent** built with LangGr
               │
               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                     MongoDB (Two Collections)                     │
-│                                                                  │
-│   subscribers  → chat_id, language, delivery_time, active        │
-│   history      → link, fingerprint (permanent dedup ledger)      │
+│                    MongoDB (Four Collections)                     │
+│                                                                 │
+│   subscribers   → chat_id, language, delivery_time, active        │
+│   history       → link, fingerprint (permanent dedup ledger)      │
+│   daily_digests → date_str, lang, content, created_at             │
+│   digest_audio  → (GridFS) filename, data, created_at             │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -187,9 +189,11 @@ Defines the LangGraph `StateGraph` with a shared `State` TypedDict that flows th
 A simple JSON file cache with a 22-hour TTL. Stores both kept and rejected articles (rejected are stored as `{}` sentinel values). This prevents re-spending tokens on articles already evaluated. Capped at 500 entries with auto-eviction.
 
 ### `db.py` — The Database Layer
-Two MongoDB collections:
+Four MongoDB collections:
 - **`subscribers`**: Stores `chat_id`, `username`, `language`, `delivery_time`, `active` flag
 - **`history`**: Permanent ledger — every sent article's URL and title fingerprint are stored here forever. Never expires.
+- **`daily_digests`**: Stores the raw text content of the generated digests for each date and language.
+- **`digest_audio`**: GridFS collections (`digest_audio.files` and `digest_audio.chunks`) storing the binary voice notes (`.mp3` files) for each digest.
 
 ### `voice_engine.py` — The Audio Layer
 - **Language-aware script builder**: Generates fully localized scripts — Hindi scripts use native Hindi intros (`सुप्रभात...`), transitions (`अगली खबर...`), and outros
@@ -297,7 +301,7 @@ The voice engine produces two distinct audio styles:
 The scheduler architecture follows a **"Lazy Initialization"** model:
 
 ```
-Every Hour at :30 UTC (:00 IST)
+Every Hour at the top of the hour (:00)
 │
 ├── Query DB: subscribers with delivery_time = current_hour?
 │
@@ -370,8 +374,9 @@ All "Subscribe" buttons link directly to `https://t.me/aitechdigest_bot`.
   - Additionally, since the scheduler uses "lazy initialization" to save costs, the `/latest` command failed to retrieve today's news if there were no scheduled deliveries earlier that morning.
 - **The Solution**: 
   - Configured `scheduler.py` to evaluate the current time and dates using the `ZoneInfo("Asia/Kolkata")` timezone.
-  - Adjusted the background execution from `:00` to `:30` past the hour to align the UTC checks perfectly with top-of-the-hour IST delivery times.
+  - Corrected the background execution to run at `:00` past the hour because the server runs on IST time, preventing the previous 30-minute timezone offset delay.
   - Upgraded the `/latest` Telegram command to dynamically trigger `ensure_digest_generated()` on demand if the local text files are missing.
+  - Added a hybrid MongoDB GridFS storage strategy to save generated text digests and voice notes in the database so that they are not lost during container redeployments.
 
 ---
 
