@@ -1,6 +1,5 @@
 import threading
 import time
-import schedule
 import os
 import sys
 import http.server
@@ -11,17 +10,37 @@ from telegram_bot import run_bot
 from scheduler import hourly_job
 
 def run_scheduler():
-    """Runs the scheduler loop in a separate thread."""
-    print("🚀 Starting background scheduler thread...")
-    # Schedule the job to run at the start of every IST hour (which is :30 UTC)
-    schedule.every().hour.at(":30").do(hourly_job)
+    """Runs the scheduler loop in a separate thread.
+    
+    Instead of relying on the `schedule` library's timezone-dependent .at() method,
+    we directly read IST time and fire at the top of every hour. This guarantees 
+    delivery at exactly :00 IST regardless of the server's system timezone.
+    """
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    print("🚀 Starting background scheduler thread (IST-aware)...")
+    
+    last_fired_hour = -1  # Tracks the last hour the job was fired to prevent double-firing
     
     while True:
         try:
-            schedule.run_pending()
+            ist_now = datetime.now(ZoneInfo("Asia/Kolkata"))
+            current_hour = ist_now.hour
+            current_minute = ist_now.minute
+
+            # Fire at the top of every hour (:00), but only once per hour
+            if current_minute == 0 and current_hour != last_fired_hour:
+                print(f"⏰ [{ist_now.strftime('%Y-%m-%d %I:%M %p IST')}] Triggering hourly job...")
+                last_fired_hour = current_hour
+                try:
+                    hourly_job()
+                except Exception as e:
+                    print(f"❌ hourly_job error: {e}")
         except Exception as e:
-            print(f"❌ Scheduler error: {e}")
-        time.sleep(30)
+            print(f"❌ Scheduler loop error: {e}")
+        
+        time.sleep(20)  # Check every 20 seconds — fine-grained enough to never miss :00
 
 def run_health_check_server():
     """Runs a minimal HTTP server to satisfy Render's Web Service port binding check."""
