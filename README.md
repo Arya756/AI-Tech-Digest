@@ -96,7 +96,7 @@ AI Tech Digest is a **production-grade autonomous news agent** built with LangGr
 | **Text-to-Speech** | [edge-tts](https://github.com/rany2/edge-tts) — Microsoft Neural | Voice briefings in EN & HI |
 | **Telegram** | [python-telegram-bot v22](https://python-telegram-bot.org/) | Delivery, bot commands, inline keyboards |
 | **Database** | [MongoDB](https://www.mongodb.com/) + PyMongo | Subscribers + deduplication ledger |
-| **Scheduling** | [schedule](https://schedule.readthedocs.io/) | Hourly job runner |
+| **Scheduling** | Custom IST Loop / [schedule](https://schedule.readthedocs.io/) | Hourly daemon runner & job scheduler |
 | **Frontend** | Next.js 16 + Tailwind CSS + Framer Motion | Landing page |
 | **Language** | Python 3.12+ | Core backend |
 | **Caching** | File-based JSON | 22-hour LLM response cache |
@@ -207,12 +207,12 @@ Four MongoDB collections:
 - **Guard clauses**: All handlers check for `None` on `update.message`, `update.effective_user`, etc.
 
 ### `scheduler.py` — The Background Worker
-- Runs an hourly loop using the `schedule` library
-- **Lazy Initialization**: Only runs the expensive pipeline if the digest files don't yet exist for today
-- **7-day cleanup**: Automatically deletes digest and audio files older than 7 days to prevent disk exhaustion
+- Runs an hourly loop (utilizes the `schedule` library when run as a standalone script).
+- **Lazy Initialization**: Only runs the expensive pipeline if the digest files don't yet exist for today.
+- **7-day cleanup**: Automatically deletes digest and audio files older than 7 days to prevent disk exhaustion.
 
 ### `run.py` — The Unified Entry Point
-Runs the Telegram Bot (main thread) + Scheduler (daemon thread) in one process for single-server cloud deployment.
+Runs the Telegram Bot (main thread) + Scheduler (daemon thread using a custom, drift-free IST time-check loop) in one process for single-server cloud deployment.
 
 ---
 
@@ -374,7 +374,7 @@ All "Subscribe" buttons link directly to `https://t.me/aitechdigest_bot`.
   - Additionally, since the scheduler uses "lazy initialization" to save costs, the `/latest` command failed to retrieve today's news if there were no scheduled deliveries earlier that morning.
 - **The Solution**: 
   - Configured `scheduler.py` to evaluate the current time and dates using the `ZoneInfo("Asia/Kolkata")` timezone.
-  - Corrected the background execution to run at `:00` past the hour because the server runs on IST time, preventing the previous 30-minute timezone offset delay.
+  - Replaced the schedule library's startup-offset dependent loop in run.py with a direct, custom IST time-check loop. This reads time explicitly using ZoneInfo("Asia/Kolkata") and triggers hourly_job exactly at :00 IST, completely bypassing system timezone or container boot timing offsets.
   - Upgraded the `/latest` Telegram command to dynamically trigger `ensure_digest_generated()` on demand if the local text files are missing.
   - Added a hybrid MongoDB GridFS storage strategy to save generated text digests and voice notes in the database so that they are not lost during container redeployments.
 
