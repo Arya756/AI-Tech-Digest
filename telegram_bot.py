@@ -98,6 +98,7 @@ def _parse_digest_articles(digest_path: Path) -> list[dict]:
         impact   = ""
         link     = ""
         priority = "📰"
+        audience = ""   # 👥 derived from category, zero LLM cost
 
         for raw_line in block.splitlines():
             line = raw_line.strip()
@@ -134,9 +135,20 @@ def _parse_digest_articles(digest_path: Path) -> list[dict]:
             elif "\U0001F449" in line and not impact:
                 impact = re.sub(r"^\U0001F449\s*", "", line).strip()
 
+            # Audience — 👥
+            elif "\U0001F465" in line and not audience:
+                audience = re.sub(r"^\U0001F465\s*", "", line).strip()
+
             # Link — 🔗
             elif "\U0001F517" in line or line.startswith("http"):
                 link = re.sub(r"^\U0001F517\s*", "", line).strip()
+
+        # Fallback guard — if audience tag is missing (e.g. format drift after a
+        # summarize.py change), default gracefully instead of silently dropping the tag.
+        if not audience:
+            audience = "🌐 Everyone"
+            if title:  # only warn when we actually parsed a real story block
+                print(f"⚠️  Parser: missing audience tag for '{title[:50]}' — check .txt format")
 
         if title:
             articles.append({
@@ -147,6 +159,7 @@ def _parse_digest_articles(digest_path: Path) -> list[dict]:
                 "impact":   impact,
                 "link":     link,
                 "priority": priority,
+                "audience": audience,
             })
 
     return articles
@@ -180,20 +193,24 @@ def _format_telegram_message(articles: list[dict], date_str: str) -> tuple[str, 
         source   = esc(art["source"]) if art["source"] else ""
         impact   = esc(art["impact"]) if art["impact"] else ""
         context  = esc(art.get("context", "")) if art.get("context") else ""
+        audience = esc(art.get("audience", ""))
 
         lines.append(f"*{i}\\. {title}*")
         lines.append("")
+        if audience:
+            lines.append(f"_{audience}_")
+            lines.append("")
         if source:
-            lines.append(f"• *Source:* _{source}_")
+            lines.append(f"\u2022 *Source:* _{source}_")
             lines.append("")
         if summary:
-            lines.append(f"• *Summary:* {summary}")
+            lines.append(f"\u2022 *Summary:* {summary}")
             lines.append("")
         if context:
-            lines.append(f"• *Context:* {context}")
+            lines.append(f"\u2022 *Context:* {context}")
             lines.append("")
         if impact:
-            lines.append(f"• *Impact:* {impact}")
+            lines.append(f"\u2022 *Impact:* {impact}")
         # Visual divider between stories (except after last)
         if i < len(articles):
             lines.append("―――――――――――――")

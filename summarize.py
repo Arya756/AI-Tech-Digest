@@ -83,7 +83,8 @@ JSON schema (use exact keys):
 
 CATEGORY — pick the MOST SPECIFIC one that fits:
 - "AI"       → new AI/ML model releases, LLM products, AI agent launches, AI safety findings
-- "infra"    → data centers, GPUs/chips, cloud shifts, networking, security vulnerabilities, supply chain attacks
+- "ai_tools" → practical AI-powered tools users can use TODAY (e.g. coding assistants, AI writing tools, AI search, AI in productivity apps like Notion/Figma/VS Code)
+- "hardware" → GPU/chip releases, AI chip supply chain, AI energy demands, semiconductor breakthroughs that DIRECTLY impact AI training/inference costs or capabilities. NOT generic data centers or networking.
 - "startup"  → funding rounds (must include $ amount), new company launches, acqui-hires, founder moves
 - "big_tech" → Google/Apple/Meta/Microsoft/Amazon/Nvidia product announcements or strategy
 - "research" → peer-reviewed papers, scientific breakthroughs, benchmark results
@@ -91,28 +92,35 @@ CATEGORY — pick the MOST SPECIFIC one that fits:
 
 BOUNDARY EXAMPLES (memorise these):
 - "OpenAI builds sandbox for Codex" = "AI" (new AI product/tool)
-- "npm supply chain attack" = "infra" (security incident)
+- "Cursor AI launches Agent mode" = "ai_tools" (practical tool developers use today)
+- "Notion adds AI writing copilot to free plan" = "ai_tools" (AI feature in productivity app)
+- "Google Colab now runs Llama 3 locally" = "ai_tools" (practical tool for AI practitioners)
+- "Nvidia releases H200 GPU" = "hardware" (directly impacts AI training costs)
+- "TSMC chip shortage delays GPU supply" = "hardware" (directly impacts AI hardware pricing)
+- "AWS opens new data center in Tokyo" = "other" (generic infra, zero AI-specific impact)
 - "Google Finance expands to Europe" = "big_tech" (Google product launch)
 - "AutoScout24 uses ChatGPT" = "other" (customer case study, NOT news)
-- "Meta open-sources GPU comms lib" = "infra" (compute infrastructure)
-- "$8M seed round" = "startup" (has $ amount = funding)
+- "Meta open-sources GPU comms lib" = "hardware" (directly improves AI training infra)
+- "$8M seed round for AI safety startup" = "startup" (has $ amount = funding)
 - "Varda Space commercializes drug manufacturing" = "other" (business deal, not a funding round)
-Do NOT assign "AI" just because AI is mentioned. Ask: is this a NEW AI PRODUCT or MODEL?
+Do NOT assign "AI" just because AI is mentioned. Ask: is this a NEW AI MODEL or PRODUCT? Is it a TOOL users can use today?
 
 Rules:
-- keep=true ONLY for: new AI/ML model launches, infra breakthroughs, major funding (>$50M), tech research with broad real-world impact, big tech strategy shifts
-- keep=false for: biology/archaeology/physics/chemistry research (NOT tech), customer case studies, opinion pieces, minor feature updates, rumours, small funding (<$20M), think-pieces, how-to posts, legal/court proceedings
-- summary: exactly 2 sentences, hard facts only, include specific names/numbers
-- context: 1-2 sentences of BACKGROUND for a non-technical listener. Explain what key terms mean, what happened before this story, or why this topic matters historically. Skip if the story needs no background. Example: "A supply chain attack poisons a widely-used software package so every app that installs it gets infected. npm is the world's largest JavaScript package registry with over 2 million packages."
+- keep=true ONLY for: new AI/ML model launches, AI-hardware breakthroughs, major funding (>$20M for AI-focused companies, >$100M for non-AI companies), tech research with broad real-world impact, big tech strategy shifts, new practical AI tools. The source of this article has already been pre-vetted — opinion pieces and essays from these trusted sources are acceptable signal, do NOT penalise them as noise.
+- keep=false for: biology/archaeology/physics/chemistry research (NOT tech), customer case studies, minor feature updates, rumours, small funding (<$20M for AI companies, <$100M for non-AI companies), how-to posts, legal/court proceedings, generic data center openings, generic opinion pieces from unknown or unverified sources.
+- For borderline cases with mixed signals (e.g. half announcement, half marketing; or a notable team below the funding threshold), score conservatively and let keep=false protect quality.
+- summary: 2 sentences, hard facts only, include specific names/numbers. Prioritise by story type — model/product launch: what it does + who can use it now; funding: amount + what they are building with it; research: key finding + what makes it different from prior work; big tech: what changed + when it ships. Keep exactly 2 sentences regardless of story type.
+- context: ONLY include if the story contains a technical term, company, or concept a smart non-engineer would likely NOT know. SKIP entirely for well-known entities: OpenAI, Google, Microsoft, Meta, Apple, Nvidia, ChatGPT, LLM, GPU, AGI, AI, Tesla. Write for someone who reads TechCrunch but does not code. Max 2 sentences.
 - innovation 0-5: technical novelty (5=first of its kind, 0=incremental)
 - impact 0-5: industry-wide magnitude (5=changes the game, 1=niche only)
-- credibility 0-5: firmness of announcement (official+confirmed=5, rumour=1)
+- credibility 0-5: firmness of announcement (official+confirmed=5, rumour=1). Future predictions and forecasts about what AI "will" do cap at credibility=2 regardless of source quality — only confirmed, shipped facts score higher.
 - noise -5-0: penalise marketing/case-study/hype content (0=clean, -5=pure noise)
-- why_it_matters: 8-12 words. WHO loses or gains WHAT specifically.
+- why_it_matters: 8-12 words. WHO loses or gains WHAT specifically. Write for a smart non-engineer — avoid extreme acronym stacking and unexplained proper nouns. Use plain language equivalents for unavoidable technical terms.
   FORBIDDEN PHRASES: "gain insights", "gain faster X", "advances technology", "enhances experience", "transforms X"
+  FORBIDDEN: stacked unexplained jargon (e.g. "NCCL-optimized NVLink topology bottleneck")
   GOOD: "OpenAI loses video market to competitor 10x cheaper"
-  GOOD: "npm maintainers must audit 3M dependent packages immediately"
-  GOOD: "AMD closes CUDA gap, threatening Nvidia monopoly on AI training"
+  GOOD: "Developers get a free AI coding assistant rivalling GitHub Copilot"
+  GOOD: "AMD's new chip lets companies train AI without paying Nvidia's premium"
 - If unsure on keep → false"""
 
 
@@ -298,11 +306,12 @@ def analyze_articles_parallel(articles: list[dict]) -> list[dict]:
 # ─────────────────────────────────────────────────────────────────────────────
 
 CATEGORY_SLOTS = {
-    "AI":       3,
-    "infra":    2,
+    "AI":       3,   # primary focus — new models and AI products
+    "ai_tools": 2,   # practical tools users can try today
+    "research": 2,   # raised from 1 — papers matter to this audience
     "big_tech": 2,
-    "startup":  2,
-    "research": 1,   # max 1 paper per digest
+    "hardware": 1,   # only AI-hardware relevant stories (was infra)
+    "startup":  1,   # lowered from 2 — less funding noise
     "other":    1,
 }
 TOP_N = 5
@@ -396,6 +405,27 @@ def _priority_tag(score: float) -> str:
         return "📌 NOTE"
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# AUDIENCE TAGGING — derived from category, zero additional LLM calls
+# Surfaces who this story is most relevant to based on its category.
+# ─────────────────────────────────────────────────────────────────────────────
+
+AUDIENCE_TAGS: dict[str, str] = {
+    "AI":       "🌐 Everyone",
+    "ai_tools": "👩‍💻 Developers",
+    "hardware": "⚙️  Engineers",
+    "startup":  "🚀 Founders & Investors",
+    "big_tech": "🌐 Everyone",
+    "research": "🔬 Researchers",
+    "other":    "🌐 Everyone",
+}
+
+
+def _audience_tag(category: str) -> str:
+    """Return the audience label for a category. Zero LLM calls — derived from existing data."""
+    return AUDIENCE_TAGS.get(category, "🌐 Everyone")
+
+
 def generate_final_output(top_articles: list[dict]) -> str:
     """Build the formatted digest string from pre-analyzed articles."""
     from datetime import datetime
@@ -410,7 +440,9 @@ def generate_final_output(top_articles: list[dict]) -> str:
 
         lines.append(f"{i}. {tag}  [Score: {score}]")
         lines.append(f"   📰 {art['title']}")
+        audience = _audience_tag(art["category"])
         lines.append(f"   🏷️  {art['category'].upper()} | 📡 {art['source']}")
+        lines.append(f"   👥 {audience}")
         lines.append(f"   📝 {art['summary']}")
         context = art.get("context", "").strip()
         if context:
