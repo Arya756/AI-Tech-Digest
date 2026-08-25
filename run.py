@@ -71,6 +71,45 @@ if __name__ == "__main__":
     # Ensure directories exist
     os.makedirs("digests", exist_ok=True)
     
+    # ── Startup self-test ────────────────────────────────────────────────
+    # Fail loudly and clearly instead of running a dead service silently.
+    print("🔧 Running startup self-test...")
+    ok = True
+    try:
+        from db import client, get_subscribers_by_time
+        client.admin.command("ping")
+        print("  ✅ MongoDB connection OK")
+    except Exception as e:
+        ok = False
+        print(f"  ❌ MongoDB connection FAILED: {e}")
+    try:
+        from telegram_bot import _check_token
+        if not _check_token():
+            ok = False
+            print("  ❌ Telegram bot token missing/invalid")
+        else:
+            print("  ✅ Telegram bot token OK")
+    except Exception as e:
+        ok = False
+        print(f"  ❌ Telegram token check FAILED: {e}")
+    try:
+        from db import get_subscribers_by_time
+        active = get_subscribers_by_time("08:00 AM") or []
+        # Count any active subscriber across all known delivery hours
+        from db import subscribers_collection
+        total_active = subscribers_collection.count_documents({"active": True})
+        print(f"  ✅ Active subscribers in DB: {total_active}")
+        if total_active == 0:
+            print("  ⚠️  WARNING: zero active subscribers — scheduler will send nothing.")
+    except Exception as e:
+        ok = False
+        print(f"  ❌ Subscriber check FAILED: {e}")
+
+    if not ok:
+        print("\n💥 Startup self-test FAILED — aborting. Fix config and redeploy.\n")
+        sys.exit(1)
+    print("✅ Startup self-test passed.\n")
+    
     print("🌟 Starting AI Tech Digest Application...")
     
     # Start the dummy HTTP server so we can use Render's Free Web Service tier

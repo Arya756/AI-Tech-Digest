@@ -110,6 +110,7 @@ Rules:
 - keep=false for: biology/archaeology/physics/chemistry research (NOT tech), customer case studies, minor feature updates, rumours, small funding (<$20M for AI companies, <$100M for non-AI companies), how-to posts, legal/court proceedings, generic data center openings, generic opinion pieces from unknown or unverified sources.
 - For borderline cases with mixed signals (e.g. half announcement, half marketing; or a notable team below the funding threshold), score conservatively and let keep=false protect quality.
 - summary: 2 sentences, hard facts only, include specific names/numbers. Prioritise by story type — model/product launch: what it does + who can use it now; funding: amount + what they are building with it; research: key finding + what makes it different from prior work; big tech: what changed + when it ships. Keep exactly 2 sentences regardless of story type.
+  CRITICAL ANTI-DRIFT RULE: the summary must describe ONLY the specific facts of THIS article (the company, product, finding, or event named in the title). NEVER write a generic explainer of the underlying technology (e.g. do NOT explain what a "transformer", "LLM", "VLM", or "neural network" is). If the article is about startups chasing next-gen LLMs, say what those startups are doing — not a textbook definition of LLMs.
 - context: ONLY include if the story contains a technical term, company, or concept a smart non-engineer would likely NOT know. SKIP entirely for well-known entities: OpenAI, Google, Microsoft, Meta, Apple, Nvidia, ChatGPT, LLM, GPU, AGI, AI, Tesla. Write for someone who reads TechCrunch but does not code. Max 2 sentences.
 - innovation 0-5: technical novelty (5=first of its kind, 0=incremental)
 - impact 0-5: industry-wide magnitude (5=changes the game, 1=niche only)
@@ -369,18 +370,32 @@ def rank_and_diversify(analyzed: list[dict]) -> list[dict]:
             if art in selected:
                 continue
             cat = art["category"]
+            source = art["source"]
             if category_counts.get(cat, 0) >= CATEGORY_SLOTS.get(cat, 1):
+                continue
+            if source_counts.get(source, 0) >= MAX_PER_SOURCE:
                 continue
             selected.append(art)
             category_counts[cat] = category_counts.get(cat, 0) + 1
+            source_counts[source] = source_counts.get(source, 0) + 1
             if len(selected) >= TOP_N:
                 break
 
     # Third pass: absolute fallback — fill by pure score if still gaps
+    # (still respects category AND per-source caps to honour the diversity guarantee)
     if len(selected) < TOP_N:
         for art in sorted_articles:
-            if art not in selected:
-                selected.append(art)
+            if art in selected:
+                continue
+            cat = art["category"]
+            source = art["source"]
+            if category_counts.get(cat, 0) >= CATEGORY_SLOTS.get(cat, 1):
+                continue
+            if source_counts.get(source, 0) >= MAX_PER_SOURCE:
+                continue
+            selected.append(art)
+            category_counts[cat] = category_counts.get(cat, 0) + 1
+            source_counts[source] = source_counts.get(source, 0) + 1
             if len(selected) >= TOP_N:
                 break
 

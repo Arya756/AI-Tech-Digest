@@ -387,7 +387,7 @@ const faqs = [
   },
   {
     q: "What sources does it pull from?",
-    a: "OpenAI Blog, Google AI, Microsoft AI, Meta AI, TensorFlow, Anthropic, The Verge, Wired, TechCrunch, VentureBeat, Ars Technica, ArXiv ML, and Hacker News.",
+    a: "OpenAI Blog, Google AI, Microsoft AI, Meta AI, TensorFlow, The Verge, Wired, TechCrunch, VentureBeat, Ars Technica, ArXiv ML, and Hacker News.",
   },
   {
     q: "What languages are supported?",

@@ -1,15 +1,5 @@
 #!/usr/bin/env python3
-# telegram_bot.py
-import sys
-import os
-
-# Auto-activate venv if not running inside it
-if not (sys.base_prefix != sys.prefix):
-    venv_python = os.path.join(os.path.dirname(__file__), "venv", "bin", "python3")
-    if os.path.exists(venv_python):
-        os.execv(venv_python, [venv_python] + sys.argv)
-"""
-Telegram connector for the AI Tech Digest Agent.
+"""Telegram connector for the AI Tech Digest Agent.
 
 Two modes:
   1. SEND mode  — send today's digest (text + voice note) to a chat_id
@@ -21,6 +11,14 @@ Usage:
   python3 telegram_bot.py --bot             # run interactive subscription bot
   python3 telegram_bot.py --test            # send a short test message only
 """
+import sys
+import os
+
+# Auto-activate venv if not running inside it
+if not (sys.base_prefix != sys.prefix):
+    venv_python = os.path.join(os.path.dirname(__file__), "venv", "bin", "python3")
+    if os.path.exists(venv_python):
+        os.execv(venv_python, [venv_python] + sys.argv)
 
 import os
 import sys
@@ -30,7 +28,7 @@ from datetime import date  # kept for any legacy references
 from pathlib import Path
 
 from dotenv import load_dotenv
-from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, Update, InputMediaPhoto
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 from telegram.constants import ParseMode
 
@@ -99,6 +97,7 @@ def _parse_digest_articles(digest_path: Path) -> list[dict]:
         link     = ""
         priority = "📰"
         audience = ""   # 👥 derived from category, zero LLM cost
+        category = ""   # 🏷️ category (lowercased), e.g. "research"
 
         for raw_line in block.splitlines():
             line = raw_line.strip()
@@ -117,9 +116,11 @@ def _parse_digest_articles(digest_path: Path) -> list[dict]:
             if "\U0001F4F0" in line and not title:
                 title = re.sub(r"^\U0001F4F0\s*", "", line).strip()
 
-            # Category/Source line — 🏷️ / 📡
+            # Category/Source line — 🏷️ / 📡  (format: "CATEGORY | 📡 Source")
             elif "\U0001F3F7" in line or "\U0001F4E1" in line:
                 if "|" in line:
+                    cat_raw = line.split("|")[0]
+                    category = re.sub(r"[^A-Za-z]", " ", cat_raw).strip().lower()
                     source_raw = line.split("|")[-1].strip()
                     source = re.sub(r"[\U0001F4E1\s]+", " ", source_raw).strip()
 
@@ -160,6 +161,7 @@ def _parse_digest_articles(digest_path: Path) -> list[dict]:
                 "link":     link,
                 "priority": priority,
                 "audience": audience,
+                "category": category,
             })
 
     return articles
@@ -232,6 +234,67 @@ def _format_telegram_message(articles: list[dict], date_str: str) -> tuple[str, 
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# THUMBNAIL GALLERY
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _build_thumb_items(articles: list[dict], date_str: str, lang: str) -> list[dict]:
+    """
+    Return structured item dicts (title/source/category/total_score/link) for
+    thumbnail rendering. Prefer persisted structured items from the DB (they
+    carry the REAL category + score from ranking); fall back to the parsed
+    text digest, using the article's own category field when present.
+    """
+    try:
+        from db import load_digest_items
+        items = load_digest_items(date_str, lang)
+        if items:
+            return items
+    except Exception:
+        pass
+
+    # Fallback: derive from parsed text articles. Use the article's own
+    # category (e.g. "RESEARCH") when available; otherwise infer from priority.
+    prio_score = {"🔥 CRITICAL": 20.0, "⚡ IMPORTANT": 15.0, "📌 NOTE": 9.0}
+    cat_map = {"🔥": "ai", "⚡": "ai_tools", "📌": "other"}
+    out = []
+    for art in articles:
+        pri = art.get("priority", "")
+        # Prefer a real category parsed from the 🏷️ line, else infer from priority.
+        # Normalize (spaces -> underscores) so "ai tools" matches the palette key.
+        raw_cat = art.get("category") or cat_map.get(pri, "other")
+        cat = str(raw_cat).strip().lower().replace(" ", "_")
+        score = art.get("total_score") or prio_score.get(pri, 10.0)
+        out.append({
+            "title": art.get("title", "Untitled"),
+            "source": art.get("source", ""),
+            "category": cat,
+            "total_score": score,
+            "link": art.get("link", ""),
+            "summary": art.get("summary", ""),
+            "context": art.get("context", ""),
+        })
+    return out
+
+
+def _render_thumbnails(items: list[dict], date_str: str, lang: str) -> list[tuple[str, dict]]:
+    """
+    Render one PNG per story via thumbnail.py. Returns [(png_path, item)].
+    Failures are skipped individually (never abort the whole gallery).
+    """
+    from thumbnail import generate_story_thumbnail
+    results = []
+    for i, it in enumerate(items, 1):
+        it = dict(it)
+        it["_date_str"] = date_str
+        try:
+            p = generate_story_thumbnail(it, i, lang=lang)
+            results.append((p, it))
+        except Exception as e:
+            print(f"  ⚠️ Thumbnail render failed for story {i}: {e}")
+    return results
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # SEND FUNCTIONS
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -299,15 +362,58 @@ async def send_digest(chat_id: str, date_str: str | None = None) -> bool:
 
     print(f"\n📤 Sending digest to chat_id: {chat_id}")
 
-    # 1. Send the formatted text with inline buttons
+    # 1. Send the full formatted text briefing (web previews off → clean)
     print("  → Sending text message...")
     await bot.send_message(
         chat_id    = chat_id,
         text       = text_msg,
         parse_mode = ParseMode.MARKDOWN_V2,
         reply_markup = keyboard,
+        disable_web_page_preview = True,
     )
     print("  ✅ Text sent")
+
+    # 1.5 Send a SEQUENTIAL per-story gallery: thumbnail photo, then a short
+    # text block with a tappable "Read" link — repeated for each story, so the
+    # chat reads: thumb → text+link → thumb → text+link ... then voice at end.
+    # Guarded: a thumbnail/parse failure must never block text/voice delivery.
+    try:
+        import re
+        def _esc(t: str) -> str:
+            return re.sub(r"([_*\[\]()~`>#+=|{}.!\-])", r"\\\1", t)
+        thumb_items = _build_thumb_items(articles, date_str, lang)
+        rendered = _render_thumbnails(thumb_items, date_str, lang)
+        for idx, (png_path, it) in enumerate(rendered, 1):
+            # Photo first
+            try:
+                with open(png_path, "rb") as photo:
+                    await bot.send_photo(chat_id=chat_id, photo=photo)
+            except Exception as pe:
+                print(f"  ⚠️ Thumbnail {idx} send failed: {pe}")
+                continue
+            # Then the text + tappable Read link (preview off → no auto cards)
+            title_esc = _esc(it.get("title", "")[:80])
+            src_esc   = _esc(it.get("source", ""))
+            sum_esc   = _esc(it.get("summary", "")[:300])
+            ctx_esc   = _esc(it.get("context", "")[:200])
+            link      = it.get("link", "")
+            cap = f"*{idx}\\. {title_esc}*"
+            if src_esc:
+                cap += f"\n_{src_esc}_"
+            if sum_esc:
+                cap += f"\n\n{sum_esc}"
+            elif ctx_esc:
+                cap += f"\n\n{ctx_esc}"
+            cap += f"\n\n🔗 [Read full story]({link})"
+            await bot.send_message(
+                chat_id = chat_id,
+                text = cap,
+                parse_mode = ParseMode.MARKDOWN_V2,
+                disable_web_page_preview = True,
+            )
+        print(f"  ✅ Sequential gallery sent ({len(rendered)} stories)")
+    except Exception as e:
+        print(f"  ⚠️ Gallery send failed (text/voice still delivered): {e}")
 
     # 2. Send the voice note
     print("  → Uploading voice note...")

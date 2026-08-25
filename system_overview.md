@@ -139,7 +139,7 @@ The orchestration in `graph.py` consists of 4 nodes:
 ```
 
 ### 1. `fetch_node` (Ingestion)
-* Pulls articles in parallel from **12 RSS sources** (such as OpenAI, Google AI, Microsoft AI, Meta, VentureBeat, TechCrunch, ArXiv, and Hacker News).
+* Pulls articles in parallel from **12 RSS sources** (such as OpenAI, Google AI, Microsoft AI, Meta, VentureBeat, TechCrunch, ArXiv, and Hacker News) — **13 feeds total** including r/MachineLearning via the Reddit JSON API.
 * Pulls trending posts from **r/MachineLearning** (Reddit JSON API) with upvotes `>= 80`.
 * Applies **Age Filters**: Capping news articles to a maximum of 2 days and lab blogs to 7 days.
 * Applies **Deduplication Level 1 & 2**: Immediately filters out URLs and title fingerprints matching the DB `history` collection.
@@ -149,7 +149,7 @@ The orchestration in `graph.py` consists of 4 nodes:
 * **Stage 1 (Cache Verification)**: Checks the local `.digest_cache.json` (22-hour TTL). If the article was already processed:
   * If approved: Retrieve structured scores.
   * If rejected: Skip article (stored as `{}` sentinel).
-* **Stage 2 (Groq scoring)**: For uncached articles, calls Groq LLM in parallel (4 threads) to score the story and return a structured JSON response:
+* **Stage 2 (Groq scoring)**: For uncached articles, calls Groq LLM in parallel (3 threads) to score the story and return a structured JSON response:
   ```json
   {
     "keep": true,
@@ -166,9 +166,9 @@ The orchestration in `graph.py` consists of 4 nodes:
 
 ### 3. `rank_node` (Diversity Scoring & Selection)
 * **Formula**:
-  $$\text{Total Score} = (\text{innovation} + \text{impact} + \text{credibility} - [\text{noise} \times 10]) \times \text{source\_weight}$$
+  $$\text{Total Score} = (\text{innovation} + \text{impact} + \text{credibility} + \text{noise}) \times \text{source\_weight}$$  \quad(\text{noise is already on a } -5\dots0 \text{ scale, so it subtracts from the total})
   * A -10% to -20% score penalty is applied to Academic Papers (ArXiv) and Social Media (Reddit) since they rarely warrant top-billing on the day of publication.
-* **Diversity Caps**: Max 2 AI, 2 Big Tech, 2 Startup, 1 Research, 1 Infra, and 2 stories per source.
+* **Diversity Caps** (`CATEGORY_SLOTS` in `summarize.py`): AI:3, ai_tools:2, research:2, big_tech:2, hardware:1, startup:1, other:1, and max 2 stories per source.
 * **Selection Process**: Runs a 3-pass loop to select exactly 5 articles while enforcing the above diversity constraints. If constraints cannot be met, it gracefully relaxes them.
 
 ### 4. `output_node` (Formatting & Translation)

@@ -6,7 +6,7 @@ load_dotenv()
 
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
 import certifi
-client = MongoClient(MONGO_URI, tlsCAFile=certifi.where(), tlsAllowInvalidCertificates=True)
+client = MongoClient(MONGO_URI, tlsCAFile=certifi.where(), tlsAllowInvalidCertificates=False)
 db = client["ai_news_agent"]
 subscribers_collection = db["subscribers"]
 
@@ -41,11 +41,11 @@ def get_subscribers_by_time(delivery_time: str) -> list[dict]:
     """Return a list of active subscribers scheduled for a specific time or its 12-hour opposite."""
     opposite_time = delivery_time.replace("AM", "PM") if "AM" in delivery_time else delivery_time.replace("PM", "AM")
     subs = subscribers_collection.find({
-        "active": True, 
+        "active": True,
         "delivery_time": {"$in": [delivery_time, opposite_time]}
     })
     return [{"chat_id": sub["chat_id"], "language": sub.get("language", "en")} for sub in subs]
-    
+
 def get_subscriber(chat_id: str) -> dict | None:
     """Get a single subscriber."""
     return subscribers_collection.find_one({"chat_id": chat_id})
@@ -103,15 +103,29 @@ def load_digest_text(date_str: str, lang: str) -> str | None:
     doc = digests_collection.find_one({"date_str": date_str, "lang": lang})
     return doc["content"] if doc else None
 
+def save_digest_items(date_str: str, lang: str, items: list[dict]):
+    """Persist the structured article list so thumbnails can be generated
+    without re-parsing the formatted .txt digest."""
+    digests_collection.update_one(
+        {"date_str": date_str, "lang": lang},
+        {"$set": {"items": items}},
+        upsert=True
+    )
+
+def load_digest_items(date_str: str, lang: str) -> list[dict] | None:
+    """Load the structured article list from MongoDB."""
+    doc = digests_collection.find_one({"date_str": date_str, "lang": lang})
+    return doc.get("items") if doc else None
+
 def save_digest_mp3(date_str: str, lang: str, mp3_bytes: bytes):
     """Save the MP3 voice note into MongoDB via GridFS."""
     filename = f"digest_{date_str}_{lang}.mp3"
-    
+
     # Delete old file with same name if it exists (GridFS doesn't upsert directly)
     existing = fs.find_one({"filename": filename})
     if existing:
         fs.delete(existing._id)
-        
+
     fs.put(mp3_bytes, filename=filename, created_at=time.time())
     print(f"✅ MP3 digest saved to DB: {filename}")
 
@@ -124,15 +138,15 @@ def load_digest_mp3(date_str: str, lang: str) -> bytes | None:
 def delete_old_digests(days: int = 7):
     """Delete digests and MP3s older than the specified number of days."""
     cutoff = time.time() - (days * 86400)
-    
+
     # Delete from text collection
     res = digests_collection.delete_many({"created_at": {"$lt": cutoff}})
-    
+
     # Delete from GridFS
     count = 0
     for file in fs.find({"created_at": {"$lt": cutoff}}):
         fs.delete(file._id)
         count += 1
-        
+
     if res.deleted_count > 0 or count > 0:
         print(f"🧹 Cleaned up DB: {res.deleted_count} texts, {count} MP3s deleted.")

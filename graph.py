@@ -6,7 +6,6 @@ from typing_extensions import TypedDict
 
 from fetch_news   import fetch_news
 from summarize    import analyze_articles_parallel, rank_and_diversify, generate_final_output, cheap_prefilter
-from cache        import get_cached_result, set_cached_result, cache_stats
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -25,10 +24,9 @@ class State(TypedDict, total=False):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def fetch_node(state: State) -> State:
-    print("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    print("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     print("  NODE 1 → FETCH")
     print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-    print(cache_stats())
 
     articles = fetch_news()
     state["raw_articles"] = articles
@@ -38,8 +36,8 @@ def fetch_node(state: State) -> State:
 def analyze_node(state: State) -> State:
     """
     Combined filter + summarize + score node.
-    Uses cache for articles seen in previous runs.
-    New articles are processed in parallel.
+    Articles are deduped against previously-sent items by fetch_news()
+    (MongoDB history). New articles are processed in parallel.
     """
     print("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     print("  NODE 2 → ANALYZE  (filter + score + summarize)")
@@ -55,41 +53,9 @@ def analyze_node(state: State) -> State:
     raw, rejected_cheap = cheap_prefilter(raw)
     print(f"  🚫 Keyword filter removed {rejected_cheap} articles → {len(raw)} remain\n")
 
-    # Split into cached vs needs-processing
-    cached_results:   list[dict] = []
-    to_process:       list[dict] = []
-
-    for art in raw:
-        cached = get_cached_result(art["id"])
-        if cached is None:
-            # Not in cache at all — needs LLM processing
-            to_process.append(art)
-        elif cached:
-            # Non-empty dict = article was previously kept
-            cached_results.append(cached)
-            print(f"  💾 CACHE-HIT: {art['title'][:60]}")
-        else:
-            # Empty dict {{}} = article was previously rejected — skip silently
-            print(f"  💾 CACHE-REJECTED: {art['title'][:60]}")
-
-    print(f"\n  📦 {len(cached_results)} from cache | {len(to_process)} new to process")
-
-    # Process new articles in parallel
-    fresh_results: list[dict] = []
-    if to_process:
-        fresh_results = analyze_articles_parallel(to_process)
-
-        # Persist to cache
-        processed_ids = {a["id"] for a in to_process}
-        kept_ids      = {a["id"] for a in fresh_results}
-        for art in to_process:
-            if art["id"] in kept_ids:
-                result = next(r for r in fresh_results if r["id"] == art["id"])
-                set_cached_result(art["id"], result)
-            else:
-                set_cached_result(art["id"], {})  # {} = "rejected" sentinel
-
-    all_analyzed = cached_results + fresh_results
+    # Process all surviving articles in parallel.
+    # (Dedup against past digests is handled upstream in fetch_news via MongoDB.)
+    all_analyzed = analyze_articles_parallel(raw) if raw else []
     state["analyzed"] = all_analyzed
     print(f"\n  ✅ Total kept articles: {len(all_analyzed)}")
     return state
@@ -110,6 +76,18 @@ def rank_node(state: State) -> State:
     print("\n  🏆 Final selection:")
     for i, art in enumerate(top, 1):
         print(f"  {i}. [{art['category']:8}] Score={art['total_score']:5.1f}  {art['title'][:55]}")
+
+    # Persist the structured items (real category + score) so the thumbnail
+    # gallery can render correct per-category colors without re-parsing text.
+    try:
+        from zoneinfo import ZoneInfo
+        from datetime import datetime
+        from db import save_digest_items
+        ist = datetime.now(ZoneInfo("Asia/Kolkata"))
+        date_str = f"{ist.strftime('%Y-%m-%d')}_{ist.strftime('%p')}"
+        save_digest_items(date_str, "en", top)
+    except Exception as e:
+        print(f"  ⚠️ Could not persist digest items: {e}")
 
     state["top_articles"] = top
     return state

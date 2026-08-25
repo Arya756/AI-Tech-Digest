@@ -4,12 +4,16 @@ __pycache__/
 *$py.class
 venv/
 .env
-.digest_cache.json
+.mcp_writes/
 
 # Audio and text output
 digests/*.mp3
 digests/*.txt
+digests/*.png
 !digests/.gitkeep
+
+# Dead cache file (cache.py removed)
+.digest_cache.json
 
 # IDEs
 .vscode/

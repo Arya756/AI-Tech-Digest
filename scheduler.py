@@ -7,7 +7,6 @@ if not (sys.base_prefix != sys.prefix):
     if os.path.exists(venv_python):
         os.execv(venv_python, [venv_python] + sys.argv)
 
-import schedule
 import time
 import asyncio
 from datetime import datetime
@@ -109,13 +108,34 @@ def hourly_job():
     
     # Get subscribers for this hour
     subscribers = get_subscribers_by_time(current_time)
-    
-    if subscribers:
-        try:
-            ensure_digest_generated()
-        except Exception as e:
-            print(f"❌ Failed to generate digest: {e}")
-            return # Cannot proceed if digest is missing
+
+    if not subscribers:
+        # Log clearly so a "no messages sent" hour is diagnosable, not silent.
+        print(f"[{ist_now}] ⏰ Hourly job for {current_time}: 0 subscribers scheduled — nothing to send.")
+        return
+
+    print(f"[{ist_now}] 📋 {len(subscribers)} subscriber(s) scheduled for {current_time}")
+    try:
+        ensure_digest_generated()
+    except Exception as e:
+        print(f"❌ Failed to generate digest: {e}")
+        # Notify each subscriber instead of silently dropping the run.
+        for sub in subscribers:
+            try:
+                from telegram import Bot
+                bot = Bot(token=os.getenv("TELEGRAM_BOT_TOKEN", ""))
+                asyncio.run(bot.send_message(
+                    chat_id=sub["chat_id"],
+                    text=(
+                        "⚠️ *AI Tech Digest — temporary issue*\n\n"
+                        "We couldn't generate today's digest. We'll retry on the next "
+                        "cycle. No action needed on your part."
+                    ),
+                    parse_mode="Markdown",
+                ))
+            except Exception as notify_err:
+                print(f"⚠️ Could not notify {sub['chat_id']}: {notify_err}")
+        return # Cannot proceed if digest is missing
             
         # Pre-generating the voice notes synchronously to prevent asyncio loop crashes
         today = f"{ist_now.strftime('%Y-%m-%d')}_{ist_now.strftime('%p')}"
@@ -165,16 +185,3 @@ def hourly_job():
         
         # Broadcast the result
         asyncio.run(send_to_time(current_time))
-
-if __name__ == "__main__":
-    print("🚀 Hourly Scheduler started! Waiting for delivery windows...")
-    
-    # Schedule the job to run at the start of every hour
-    schedule.every().hour.at(":00").do(hourly_job)
-    
-    # For testing purposes:
-    # hourly_job()
-    
-    while True:
-        schedule.run_pending()
-        time.sleep(60)

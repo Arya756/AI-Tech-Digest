@@ -15,14 +15,15 @@ from graph import graph
 
 
 def main():
-    # --refresh: wipe cache so all articles re-analyzed with latest prompts
+    # --refresh: clear MongoDB article history so all articles re-analyze
+    # with the latest prompts (and aren't skipped as already-sent).
     if "--refresh" in sys.argv:
-        cache_file = Path(".digest_cache.json")
-        if cache_file.exists():
-            cache_file.unlink()
-            print("🗑️  Cache cleared — all articles will be re-analyzed.\n")
-        else:
-            print("ℹ️  No cache found — starting fresh.\n")
+        try:
+            from db import history_collection
+            history_collection.delete_many({})
+            print("🗑️  Article history cleared — all articles will be re-analyzed.\n")
+        except Exception as e:
+            print(f"⚠️ Could not clear history: {e}\n")
 
     print("\n🚀 Starting AI Tech Digest Agent...\n")
 

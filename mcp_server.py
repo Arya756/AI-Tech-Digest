@@ -20,21 +20,16 @@ def get_project_overview() -> str:
     overview_path = PROJECT_ROOT / "system_overview.md"
     if overview_path.exists():
         return overview_path.read_text(encoding="utf-8")
-    
-    # Fallback to absolute conversation artifact path
-    artifact_path = Path("/Users/ayusharyan/.gemini/antigravity-ide/brain/90ec91d1-4fe6-4564-940e-ca455e41895f/system_overview.md")
-    if artifact_path.exists():
-        return artifact_path.read_text(encoding="utf-8")
-        
+
     return "System overview document not found. Please ensure system_overview.md is generated."
 
 @mcp.tool()
 def read_source_file(file_name: str) -> str:
     """Read the contents of a specific Python or config file in the project for source code context.
-    Allowed files: graph.py, fetch_news.py, summarize.py, cache.py, db.py, run.py, scheduler.py, telegram_bot.py, main.py, requirements.txt
+    Allowed files: graph.py, fetch_news.py, summarize.py, db.py, run.py, scheduler.py, telegram_bot.py, main.py, requirements.txt
     """
     allowed_files = {
-        "graph.py", "fetch_news.py", "summarize.py", "cache.py", "db.py",
+        "graph.py", "fetch_news.py", "summarize.py", "db.py",
         "run.py", "scheduler.py", "telegram_bot.py", "main.py", "requirements.txt"
     }
     if file_name not in allowed_files:
@@ -47,28 +42,54 @@ def read_source_file(file_name: str) -> str:
 
 @mcp.tool()
 def write_source_file(file_name: str, content: str) -> str:
-    """Overwrite the contents of a specific project file with new code. Use with caution.
-    Allowed files: graph.py, fetch_news.py, summarize.py, cache.py, db.py, run.py, scheduler.py, telegram_bot.py, main.py, requirements.txt
+    """Overwrite the contents of a specific project file with new code.
+
+    HARDENED (post-incident): writes go to a SANDBOX directory
+    (PROJECT_ROOT/.mcp_writes/), NEVER to the live project files. This
+    prevents a test or MCP call from clobbering a real module (a stray
+    write once overwrote db.py with '# ok', breaking the whole pipeline).
+    To apply a change to the live repo, the agent edits files directly —
+    this tool is for proposing/safe-staging code only.
+
+    GUARDED: only allowlisted, non-secret, non-self files may be written.
+    Importable modules, config files containing secrets (.env, *_config*),
+    and the MCP server itself are denied to prevent self-modification or
+    credential leakage through this tool surface.
     """
+    # Defense in depth: never write live project files from this surface.
+    forbidden = (".env", "mcp_server.py", "__init__.py", "db.py")
+    if file_name in forbidden or "secret" in file_name.lower() or "credential" in file_name.lower():
+        return f"Access Denied: '{file_name}' is not writable via this tool."
+
     allowed_files = {
-        "graph.py", "fetch_news.py", "summarize.py", "cache.py", "db.py",
+        "graph.py", "fetch_news.py", "summarize.py", "db.py",
         "run.py", "scheduler.py", "telegram_bot.py", "main.py", "requirements.txt"
     }
     if file_name not in allowed_files:
-        return f"Access Denied: Can only write to project source files ({', '.join(allowed_files)})"
-        
-    file_path = PROJECT_ROOT / file_name
+        return f"Access Denied: can only stage project source files ({', '.join(sorted(allowed_files))})."
+
+    # Sandbox: write to .mcp_writes/ so live files are never modified.
+    sandbox = PROJECT_ROOT / ".mcp_writes"
     try:
+        sandbox.mkdir(parents=True, exist_ok=True)
+        file_path = sandbox / file_name
         file_path.write_text(content, encoding="utf-8")
-        return f"Successfully updated {file_name}"
+        return (
+            f"Staged (NOT applied to live repo) at: {file_path}\n"
+            f"Live file untouched. To apply, the agent must edit the real file directly."
+        )
     except Exception as e:
-        return f"Error writing to {file_name}: {str(e)}"
+        return f"Error staging {file_name}: {str(e)}"
 
 @mcp.tool()
 def get_cache_status() -> str:
-    """Get the current LLM cache statistics (hit/miss counts and entries)."""
-    from cache import cache_stats
-    return cache_stats()
+    """Get the current article-history (dedup) statistics from MongoDB."""
+    try:
+        from db import history_collection
+        total = history_collection.count_documents({})
+        return f"Article history: {total} entries recorded (prevents re-sending old digests)."
+    except Exception as e:
+        return f"Could not read history stats: {e}"
 
 @mcp.tool()
 def get_latest_digest(lang: str = "en") -> str:
