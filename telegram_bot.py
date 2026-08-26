@@ -51,10 +51,8 @@ BOT_TAGLINE = "Your daily 3-minute AI briefing. Read less, know more. 🎙️"
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _today() -> str:
-    from zoneinfo import ZoneInfo
-    from datetime import datetime
-    ist_now = datetime.now(ZoneInfo("Asia/Kolkata"))
-    return f"{ist_now.strftime('%Y-%m-%d')}_{ist_now.strftime('%p')}"
+    from utils import date_str_now
+    return date_str_now()
 
 
 def _digest_txt(date_str: str, lang: str = "en") -> Path:
@@ -175,8 +173,9 @@ def _format_telegram_message(articles: list[dict], date_str: str) -> tuple[str, 
     import re
 
     def esc(text: str) -> str:
-        """Escape special chars for MarkdownV2."""
-        return re.sub(r"([_*\[\]()~`>#+\-=|{}.!\\])", r"\\\1", text)
+        """Escape special chars for MarkdownV2 (delegates to shared helper)."""
+        from utils import esc as _esc_fn
+        return _esc_fn(text)
 
     today_display = date.today().strftime("%B %d, %Y")
     clean_tagline = BOT_TAGLINE.replace("🎙️", "").strip()
@@ -249,8 +248,8 @@ def _build_thumb_items(articles: list[dict], date_str: str, lang: str) -> list[d
         items = load_digest_items(date_str, lang)
         if items:
             return items
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"⚠️ load_digest_items failed ({e}) — falling back to parsed text")
 
     # Fallback: derive from parsed text articles. Use the article's own
     # category (e.g. "RESEARCH") when available; otherwise infer from priority.
@@ -378,9 +377,7 @@ async def send_digest(chat_id: str, date_str: str | None = None) -> bool:
     # chat reads: thumb → text+link → thumb → text+link ... then voice at end.
     # Guarded: a thumbnail/parse failure must never block text/voice delivery.
     try:
-        import re
-        def _esc(t: str) -> str:
-            return re.sub(r"([_*\[\]()~`>#+=|{}.!\-])", r"\\\1", t)
+        from utils import esc as _esc
         thumb_items = _build_thumb_items(articles, date_str, lang)
         rendered = _render_thumbnails(thumb_items, date_str, lang)
         for idx, (png_path, it) in enumerate(rendered, 1):

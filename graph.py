@@ -80,12 +80,9 @@ def rank_node(state: State) -> State:
     # Persist the structured items (real category + score) so the thumbnail
     # gallery can render correct per-category colors without re-parsing text.
     try:
-        from zoneinfo import ZoneInfo
-        from datetime import datetime
         from db import save_digest_items
-        ist = datetime.now(ZoneInfo("Asia/Kolkata"))
-        date_str = f"{ist.strftime('%Y-%m-%d')}_{ist.strftime('%p')}"
-        save_digest_items(date_str, "en", top)
+        from utils import date_str_now
+        save_digest_items(date_str_now(), "en", top)
     except Exception as e:
         print(f"  ⚠️ Could not persist digest items: {e}")
 

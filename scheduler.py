@@ -9,21 +9,69 @@ if not (sys.base_prefix != sys.prefix):
 
 import time
 import asyncio
+import traceback
 from datetime import datetime
 from pathlib import Path
 from main import main as run_pipeline
 from telegram_bot import send_digest
 from db import get_subscribers_by_time
+from utils import date_str_now
 
 from zoneinfo import ZoneInfo
 
-def ensure_digest_generated():
-    """Ensure today's digest is generated (both EN and HI)."""
-    ist_now = datetime.now(ZoneInfo("Asia/Kolkata"))
-    today = f"{ist_now.strftime('%Y-%m-%d')}_{ist_now.strftime('%p')}"
+def _latest_stored_digest(lang: str) -> tuple[str, str] | None:
+    """Return (date_str, content) of the most recent stored digest for `lang`,
+    or None if none exists. Used as a graceful fallback when fresh generation
+    fails, so subscribers still receive useful content instead of an error."""
+    try:
+        from db import digests_collection
+        doc = digests_collection.find_one(
+            {"lang": lang, "content": {"$exists": True}},
+            sort=[("created_at", -1)],
+        )
+        if doc and doc.get("content"):
+            return doc["date_str"], doc["content"]
+    except Exception as e:
+        print(f"⚠️ Could not query latest stored digest: {e}")
+    return None
+
+def _alert_admin(subject: str, detail: str):
+    """Send a failure alert to the admin chat so errors are visible WITHOUT
+    relying on Render's (paid-tier) log history. Defaults to the oldest
+    subscriber chat_id if ADMIN_CHAT_ID is not set in .env."""
+    import os
+    admin = os.getenv("ADMIN_CHAT_ID", "").strip()
+    if not admin:
+        try:
+            from db import subscribers_collection
+            sub = subscribers_collection.find_one(sort=[("_id", 1)])
+            admin = sub.get("chat_id") if sub else ""
+        except Exception:
+            admin = ""
+    if not admin:
+        print("⚠️ No admin chat_id available to alert.")
+        return
+    try:
+        from telegram import Bot
+        bot = Bot(token=os.getenv("TELEGRAM_BOT_TOKEN", ""))
+        msg = f"🚨 *AI Tech Digest — {subject}*\n\n```{detail[:3500]}```"
+        asyncio.run(bot.send_message(chat_id=admin, text=msg, parse_mode="Markdown"))
+        print(f"📨 Alert sent to admin chat {admin}")
+    except Exception as e:
+        print(f"⚠️ Could not send admin alert: {e}")
+
+def ensure_digest_generated() -> str:
+    """Ensure today's digest is generated (both EN and HI).
+
+    On generation failure, falls back to the most recent stored digest so
+    subscribers still get useful content. Only reports a hard failure when
+    no fallback exists. Never silently drops a run.
+    """
+    today = date_str_now()
     txt_path_en = Path(f"digests/digest_{today}_en.txt")
     txt_path_hi = Path(f"digests/digest_{today}_hi.txt")
-    
+
+    # Try to restore from DB first (covers a fresh Render filesystem).
     if not txt_path_en.exists():
         try:
             from db import load_digest_text
@@ -33,7 +81,7 @@ def ensure_digest_generated():
                 txt_path_en.write_text(content, encoding="utf-8")
         except Exception as e:
             print(f"⚠️ DB load error EN: {e}")
-            
+
     if not txt_path_hi.exists():
         try:
             from db import load_digest_text
@@ -45,12 +93,41 @@ def ensure_digest_generated():
             print(f"⚠️ DB load error HI: {e}")
 
     if not txt_path_en.exists() or not txt_path_hi.exists():
-        print(f"\n[{ist_now}] ⏰ Generating daily digest...")
-        run_pipeline()
-        
+        print(f"\n[{datetime.now(ZoneInfo('Asia/Kolkata'))}] ⏰ Generating daily digest...")
+        try:
+            run_pipeline()
+        except Exception as e:
+            # Surface the REAL error with traceback (was previously swallowed → blind debugging).
+            print(f"❌ Digest generation FAILED: {type(e).__name__}: {e}")
+            tb = traceback.format_exc()
+            print(tb)
+            # Alert the admin directly via Telegram (no Render log history needed on free tier).
+            _alert_admin("digest generation failed", f"{type(e).__name__}: {e}\n\n{tb}")
+            # Graceful fallback: reuse the most recent stored digest.
+            latest = _latest_stored_digest("en")
+            if latest:
+                date_str, content = latest
+                fb_en = Path(f"digests/digest_{today}_en.txt")
+                fb_en.parent.mkdir(exist_ok=True)
+                fb_en.write_text(content, encoding="utf-8")
+                print(f"↩️  Fell back to last stored digest ({date_str}) for EN.")
+                # Hindi fallback (best-effort)
+                latest_hi = _latest_stored_digest("hi")
+                if latest_hi:
+                    _, hi_content = latest_hi
+                    fb_hi = Path(f"digests/digest_{today}_hi.txt")
+                    fb_hi.write_text(hi_content, encoding="utf-8")
+                    print(f"↩️  Fell back to last stored digest for HI.")
+                else:
+                    print("⚠️ No HI fallback available; EN-only digest will send.")
+            else:
+                print("💥 No fallback digest available — subscribers will get an error notice.")
+                _alert_admin("no digest and no fallback",
+                             f"Generation failed for {today} and no stored digest exists in MongoDB.")
+
     # Clean up old files to save disk space
     _cleanup_old_digests()
-    
+
     return today
 
 def _cleanup_old_digests(days: int = 7):
@@ -115,11 +192,13 @@ def hourly_job():
         return
 
     print(f"[{ist_now}] 📋 {len(subscribers)} subscriber(s) scheduled for {current_time}")
-    try:
-        ensure_digest_generated()
-    except Exception as e:
-        print(f"❌ Failed to generate digest: {e}")
-        # Notify each subscriber instead of silently dropping the run.
+    ensure_digest_generated()
+
+    # If generation failed AND no fallback digest exists, notify subscribers
+    # once (don't spam every hour). Otherwise broadcast proceeds normally.
+    today = date_str_now()
+    if not Path(f"digests/digest_{today}_en.txt").exists():
+        print(f"[{ist_now}] ❌ No digest available (generation failed, no fallback) — notifying subscribers.")
         for sub in subscribers:
             try:
                 from telegram import Bot
@@ -135,10 +214,9 @@ def hourly_job():
                 ))
             except Exception as notify_err:
                 print(f"⚠️ Could not notify {sub['chat_id']}: {notify_err}")
-        return # Cannot proceed if digest is missing
+        return  # Cannot proceed if digest is missing
             
         # Pre-generating the voice notes synchronously to prevent asyncio loop crashes
-        today = f"{ist_now.strftime('%Y-%m-%d')}_{ist_now.strftime('%p')}"
         from voice_engine import generate_voice_note
         
         # Generate English voice note if needed
@@ -151,8 +229,8 @@ def hourly_job():
                 if mp3_bytes:
                     mp3_path_en.write_bytes(mp3_bytes)
             except Exception as e:
-                pass
-                
+                print(f"⚠️ Could not restore EN voice note from DB: {e}")
+
             if not mp3_path_en.exists():
                 try:
                     print(f"[{ist_now}] 🎙️ Pre-generating English voice note...")
@@ -161,7 +239,7 @@ def hourly_job():
                     save_digest_mp3(today, "en", mp3_path_en.read_bytes())
                 except Exception as e:
                     print(f"⚠️ Failed to pre-generate English audio: {e}")
-                
+
         # Generate Hindi voice note if needed
         txt_path_hi = Path(f"digests/digest_{today}_hi.txt")
         mp3_path_hi = Path(f"digests/digest_{today}_hi.mp3")
@@ -172,7 +250,7 @@ def hourly_job():
                 if mp3_bytes:
                     mp3_path_hi.write_bytes(mp3_bytes)
             except Exception as e:
-                pass
+                print(f"⚠️ Could not restore HI voice note from DB: {e}")
 
             if not mp3_path_hi.exists():
                 try:

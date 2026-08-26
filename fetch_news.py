@@ -277,8 +277,8 @@ def _fetch_rss_source(source: dict, seen_ids: set, seen_fps: set) -> list[dict]:
                 if is_article_sent(link, fp):
                     print(f"  🔁 ALREADY SENT skipped: {title[:55]}")
                     continue
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"  ⚠️ dedup check failed ({e}) — keeping article")
 
             if fp in seen_fps:
                 print(f"  🔁 NEAR-DUP skipped: {title[:55]}")
@@ -367,8 +367,8 @@ def _fetch_reddit_source(source: dict, seen_ids: set, seen_fps: set) -> list[dic
                 if is_article_sent(link, fp):
                     print(f"  🔁 ALREADY SENT skipped: {title[:55]}")
                     continue
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"  ⚠️ dedup check failed ({e}) — keeping article")
 
             if fp in seen_fps:
                 print(f"  🔁 NEAR-DUP skipped: {title[:55]}")
@@ -435,8 +435,8 @@ def _fetch_hn_algolia(source: dict, seen_ids: set, seen_fps: set) -> list[dict]:
                 if is_article_sent(link, fp):
                     print(f"  🔁 ALREADY SENT skipped: {title[:55]}")
                     continue
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"  ⚠️ dedup check failed ({e}) — keeping article")
 
             if fp in seen_fps:
                 print(f"  🔁 NEAR-DUP skipped: {title[:55]}")
