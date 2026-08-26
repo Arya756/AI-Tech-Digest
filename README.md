@@ -92,14 +92,15 @@ AI Tech Digest is a **production-grade autonomous news agent** built with LangGr
 |---|---|---|
 | **AI Orchestration** | [LangGraph](https://github.com/langchain-ai/langgraph) | Stateful, multi-node AI pipeline |
 | **LLM** | [Groq API](https://groq.com/) — `llama-3.3-70b-versatile` | Article scoring, summarization, translation |
-| **RSS Parsing** | `feedparser` + `requests` | Fetching articles from 12 sources |
+| **RSS Parsing** | `feedparser` + `requests` | Fetching articles from 15 sources (12 RSS + Reddit `.rss` + Hacker News Algolia API) |
 | **Text-to-Speech** | [edge-tts](https://github.com/rany2/edge-tts) — Microsoft Neural | Voice briefings in EN & HI |
-| **Telegram** | [python-telegram-bot v22](https://python-telegram-bot.org/) | Delivery, bot commands, inline keyboards |
+| **Thumbnails** | [Pillow](https://python-pillware.org/) (CPU-only vector art) | Per-story cover images — category colors + topic motifs, zero-cost, no external image API |
+| **Telegram** | [python-telegram-bot v22](https://python-telegram-bot.org/) | Delivery, bot commands, inline keyboards, media groups |
 | **Database** | [MongoDB](https://www.mongodb.com/) + PyMongo | Subscribers + deduplication ledger |
-| **Scheduling** | Custom IST Loop / [schedule](https://schedule.readthedocs.io/) | Hourly daemon runner & job scheduler |
+| **Scheduling** | Custom IST time-check loop (in `run.py`) | Hourly daemon, drift-free, timezone-correct |
 | **Frontend** | Next.js 16 + Tailwind CSS + Framer Motion | Landing page |
 | **Language** | Python 3.12+ | Core backend |
-| **Caching** | File-based JSON | 22-hour LLM response cache |
+| **Config** | `Procfile` (`python run.py`) | Locks the Render start command |
 
 ---
 
@@ -140,7 +141,7 @@ User visits landing page
 
 ```
 NODE 1: FETCH
-  ├─ Pull RSS from 12 sources in parallel
+  ├─ Pull from 15 sources (12 RSS + Reddit `.rss` + Hacker News Algolia API) in parallel
   ├─ Apply age filters (lab blogs: 7 days, news: 2 days)
   ├─ Check MongoDB history (permanent dedup)
   ├─ Check title fingerprint (cross-source dedup)
@@ -148,11 +149,10 @@ NODE 1: FETCH
 
 NODE 2: ANALYZE (Parallel LLM calls, 4 threads)
   ├─ Stage 0: Keyword pre-filter (zero tokens — removes deals, coupons)
-  ├─ Stage 1: Check 22-hour JSON cache (skip already-scored articles)
-  ├─ Stage 2: For uncached articles, call Groq LLM with structured prompt
+  ├─ For each article, call Groq LLM with structured prompt (dedup against MongoDB `history` so repeated stories are skipped)
   │   └─ Returns JSON: {keep, category, summary, context, innovation(1-5),
   │                      impact(1-5), credibility(1-5), noise(0-1), why_it_matters}
-  └─ Write results back to cache
+  └─ No file-based cache — deduplication is handled by the MongoDB `history` ledger
 
 NODE 3: RANK
   ├─ Compute total_score = (innovation + impact + credibility - noise*10) * source_weight
@@ -175,24 +175,29 @@ NODE 4: OUTPUT
 Defines the LangGraph `StateGraph` with a shared `State` TypedDict that flows through all 4 nodes. Each node reads from and writes to this shared state, keeping the pipeline clean and testable in isolation.
 
 ### `fetch_news.py` — The Ingestion Layer
-- **12 RSS Sources** with per-source credibility weights (1.2x–1.8x) and daily caps
-- **Reddit Integration** via the JSON API, filtering posts by minimum upvote score (80+)
+- **15 sources**: 12 RSS feeds + Reddit (`.rss` Atom, no OAuth — the JSON API is blocked for bot user-agents) + Hacker News via the Algolia search API (no RSS host dependency, no auth)
+- **Per-source credibility weights** (1.2x–1.8x) and daily caps
 - **Title Fingerprinting**: Strips stopwords, takes first 6 meaningful words to create a semantic key — catches the same story published on multiple outlets
 - **Age Filtering**: Lab blogs allowed up to 7 days old; news sites capped at 2 days
+- **`_http_get()` retry helper** with exponential backoff + 429 handling, so transient Reddit/HN rate-limiting is absorbed gracefully
 
 ### `summarize.py` — The Intelligence Layer
 - **Single LLM prompt per article** — scoring + summarization + categorization in one call (minimizes token usage on Groq free tier)
 - **Parallel processing** via `ThreadPoolExecutor(max_workers=4)` — 4x faster than sequential
 - **`rank_and_diversify()`**: Three-pass selection ensuring the daily digest is never dominated by a single topic or source
 
-### `cache.py` — The Cost Shield
-A simple JSON file cache with a 22-hour TTL. Stores both kept and rejected articles (rejected are stored as `{}` sentinel values). This prevents re-spending tokens on articles already evaluated. Capped at 500 entries with auto-eviction.
+### `thumbnail.py` — The Visual Layer (zero-cost)
+- **Pillow CPU-only vector art** — no external image API (keeps the bot fully autonomous + free)
+- Renders a 1080×1080 cover per story with a **category-colored background** (7 categories: research, ai, ai_tools, big_tech, startup, hardware, other)
+- Draws a **category glyph** + a **topic-resonant motif** (phone, megaphone, chip, rocket, brain, scan, chat) chosen from the article title's keywords
+- Bundled `DejaVuSans.ttf` (SIL license) for Render portability
+- Used by `telegram_bot.send_digest` to build a per-story media gallery
 
 ### `db.py` — The Database Layer
 Four MongoDB collections:
 - **`subscribers`**: Stores `chat_id`, `username`, `language`, `delivery_time`, `active` flag
 - **`history`**: Permanent ledger — every sent article's URL and title fingerprint are stored here forever. Never expires.
-- **`daily_digests`**: Stores the raw text content of the generated digests for each date and language.
+- **`daily_digests`**: Stores the raw text content of the generated digests for each date and language, **plus the structured `items` list** (real category + score) so thumbnails render correct per-category colors without re-parsing text.
 - **`digest_audio`**: GridFS collections (`digest_audio.files` and `digest_audio.chunks`) storing the binary voice notes (`.mp3` files) for each digest.
 
 ### `voice_engine.py` — The Audio Layer
@@ -203,22 +208,27 @@ Four MongoDB collections:
 ### `telegram_bot.py` — The Delivery Layer
 - **Two modes**: `--send` (broadcast) and `--bot` (interactive registration)
 - **Emoji-based parser**: Parses digest files using Unicode emoji codepoints (`📰`, `🧠`, `👉`) instead of English strings — ensures both EN and HI digests are parsed correctly
-- **MarkdownV2 escaping**: All dynamic text is escaped before sending via Telegram's strict MarkdownV2 parser
+- **MarkdownV2 escaping**: All dynamic text is escaped via the shared `utils.esc()` helper before sending (single implementation, reused everywhere)
+- **Sequential per-story gallery**: `send_digest()` sends a thumbnail photo, then the story text (title → source → summary → tappable "Read full story" link) for each story, then the voice note — so the chat reads thumb→text→link, repeated, then audio
+- **Web-page previews disabled** on text messages so only your thumbnails + clean text show (no Telegram auto link-preview clutter)
 - **Guard clauses**: All handlers check for `None` on `update.message`, `update.effective_user`, etc.
 
 ### `scheduler.py` — The Background Worker
-- Runs an hourly loop (utilizes the `schedule` library when run as a standalone script).
-- **Lazy Initialization**: Only runs the expensive pipeline if the digest files don't yet exist for today.
-- **7-day cleanup**: Automatically deletes digest and audio files older than 7 days to prevent disk exhaustion.
+- Runs an hourly loop driven by a **custom drift-free IST time-check** (reads `ZoneInfo("Asia/Kolkata")`, triggers `hourly_job` at :00 IST — no `schedule` library, no system-timezone dependence)
+- **Lazy Initialization**: Only runs the expensive pipeline if the digest files don't yet exist for today
+- **Graceful failure handling**: If `run_pipeline()` fails (e.g. Groq quota), it surfaces the real error + full traceback, falls back to the **most recent stored digest** so subscribers still get content, and sends a `🚨 digest generation failed` alert to Telegram (via `ADMIN_CHAT_ID` or, if unset, the oldest subscriber) — so failures are visible without Render's paid-tier log history
+- **7-day cleanup**: Automatically deletes digest and audio files older than 7 days to prevent disk exhaustion
 
 ### `run.py` — The Unified Entry Point
-Runs the Telegram Bot (main thread) + Scheduler (daemon thread using a custom, drift-free IST time-check loop) in one process for single-server cloud deployment.
+- Runs the Telegram Bot (main thread) + Scheduler (daemon thread) + a dummy HTTP health-check server (so Render's Free Web Service stays alive) in one process
+- **Startup self-test**: On boot, pings MongoDB, validates the Telegram token, and counts active subscribers — fails loudly (aborts) if config is broken, instead of running a dead service silently
+- Uses `Procfile` (`python run.py`) to lock the start command on Render
 
 ---
 
 ## Deduplication System
 
-The system uses a **layered, three-level deduplication strategy**:
+The system uses a **layered, two-level deduplication strategy**:
 
 ```
 Level 1 — In-Session (Same Fetch)
@@ -231,12 +241,9 @@ Level 2 — Cross-Day (MongoDB History)
   Scope: Forever — once sent, never sent again
   Keys: article URL + title fingerprint
   Example: Story sent Monday — blocked Tuesday, Wednesday, forever
-
-Level 3 — LLM Cache (Within Same Day)
-  Tool: File-based JSON cache with 22-hour TTL
-  Scope: Multiple runs within the same day
-  Example: If main.py runs twice in one day, avoids double LLM spend
 ```
+
+> Note: a previous "Level 3" file-based JSON cache was removed; deduplication is now handled entirely by the MongoDB `history` collection, which is the source of truth for "already sent".
 
 ---
 
@@ -431,10 +438,11 @@ cd landing && npm install && npm run dev
 
 ### Render Configuration
 - **Build Command**: `pip install -r requirements.txt`
-- **Start Command**: `python run.py`
+- **Start Command**: `python run.py` (locked via `Procfile` so a dashboard reset can't break the boot)
 - **Instance Type**: Free (Web Service)
+- **Startup self-test**: On boot `run.py` pings MongoDB, validates the Telegram token, and counts active subscribers. If any check fails it aborts with a clear error instead of running a dead service.
 - **Important**: We integrated a lightweight HTTP health-check server inside `run.py` so it cleanly binds to Render's `$PORT`, allowing the entire backend to run on the **Free Web Service** tier instead of requiring a paid Background Worker.
-- Add all 3 environment variables in Render's dashboard.
+- Add all environment variables in Render's dashboard.
 - *Tip*: Use a free service like [cron-job.org](https://cron-job.org/) to ping your Render URL every 10 minutes to keep the bot awake 24/7!
 
 ### Vercel Configuration
@@ -459,7 +467,12 @@ TELEGRAM_CHAT_ID=your_personal_chat_id
 # MongoDB
 MONGO_URI=mongodb://localhost:27017
 # For production:
-# MONGO_URI=mongodb+srv://user:password@cluster.mongodb.net/
+# MONGO_URI=mongodb+srv://user:***@cluster.mongodb.net/
+
+# Admin failure alerts (optional)
+# If unset, failure alerts go to the oldest subscriber so you see errors
+# in Telegram without needing Render's paid-tier log history.
+ADMIN_CHAT_ID=
 ```
 
 ---
@@ -471,18 +484,19 @@ ai-news-agent/
 │
 ├── 🧠 Core Pipeline
 │   ├── graph.py           # LangGraph pipeline definition (4 nodes)
-│   ├── fetch_news.py      # RSS ingestion, dedup, age filtering
+│   ├── fetch_news.py      # RSS/Reddit/HN ingestion, dedup, age filtering
 │   ├── summarize.py       # LLM scoring, ranking, diversification
-│   ├── cache.py           # File-based 22-hour LLM response cache
-│   └── llm.py             # Groq ChatGroq instances
+│   ├── llm.py             # Groq ChatGroq instances
+│   └── thumbnail.py       # Zero-cost Pillow per-story cover images
 │
 ├── 🤖 Automation
 │   ├── main.py            # Pipeline runner + Hindi translation
-│   ├── scheduler.py       # Hourly scheduler + lazy digest init
-│   ├── telegram_bot.py    # Bot commands + broadcast sender
+│   ├── scheduler.py       # Hourly IST scheduler + lazy digest init + failure alerts
+│   ├── telegram_bot.py    # Bot commands + sequential thumbnail gallery sender
 │   ├── voice_engine.py    # edge-tts voice generation (EN + HI)
 │   ├── db.py              # MongoDB operations
-│   └── run.py             # Unified entry point (bot + scheduler)
+│   ├── utils.py           # Shared helpers (IST date string, MarkdownV2 escaping)
+│   └── run.py             # Unified entry point (bot + scheduler + self-test)
 │
 ├── 🌐 Frontend
 │   └── landing/           # Next.js 16 landing page
@@ -498,9 +512,10 @@ ai-news-agent/
 │
 ├── ⚙️ Configuration
 │   ├── .env               # API keys (not committed)
-│   ├── requirements.txt   # Python dependencies
-│   ├── pyrightconfig.json # IDE type checker config
-│   └── .vscode/           # VS Code interpreter settings
+│   ├── .env.example       # Template with all required vars
+│   ├── Procfile           # Render start command (python run.py)
+│   └── requirements.txt   # Python dependencies
+```
 │
 └── 📖 Documentation
     └── README.md          # This file
