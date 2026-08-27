@@ -91,7 +91,7 @@ AI Tech Digest is a **production-grade autonomous news agent** built with LangGr
 | Layer | Technology | Purpose |
 |---|---|---|
 | **AI Orchestration** | [LangGraph](https://github.com/langchain-ai/langgraph) | Stateful, multi-node AI pipeline |
-| **LLM** | [Groq API](https://groq.com/) — `llama-3.3-70b-versatile` | Article scoring, summarization, translation |
+| **LLM** | [Groq API](https://groq.com/) — `GROQ_MODEL` env (default `llama-3.1-8b-instant`) | Article scoring, summarization, translation |
 | **RSS Parsing** | `feedparser` + `requests` | Fetching articles from 15 sources (12 RSS + Reddit `.rss` + Hacker News Algolia API) |
 | **Text-to-Speech** | [edge-tts](https://github.com/rany2/edge-tts) — Microsoft Neural | Voice briefings in EN & HI |
 | **Thumbnails** | [Pillow](https://python-pillware.org/) (CPU-only vector art) | Per-story cover images — category colors + topic motifs, zero-cost, no external image API |
