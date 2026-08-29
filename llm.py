@@ -8,9 +8,10 @@ load_dotenv()
 
 # Model is configurable via env so a Groq model retirement is a one-line
 # dashboard change on Render — NOT a code redeploy.
-# `llama-3.3-70b-versatile` was retired by Groq; `llama-3.1-8b-instant` is a
-# reliable free-tier default. Set GROQ_MODEL / GROQ_MODEL_FINAL in .env to swap.
-GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
+# Groq retired llama-3.3-70b-versatile and llama-3.1-8b-instant. Current
+# free-tier text models on this account: openai/gpt-oss-120b, openai/gpt-oss-20b,
+# qwen/qwen3.6-27b, qwen/qwen3.8-27b. Default to a strong available one.
+GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
 GROQ_MODEL_FINAL = os.getenv("GROQ_MODEL_FINAL", GROQ_MODEL)
 
 # Primary fast model for bulk processing

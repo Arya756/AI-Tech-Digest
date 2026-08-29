@@ -152,6 +152,11 @@ def _safe_parse_json(text: str) -> dict | None:
     text = re.sub(r"^```(?:json)?\s*\n?", "", text, flags=re.IGNORECASE)
     text = re.sub(r"\n?```\s*$", "", text)
 
+    # Strip reasoning-model wrappers (openai/gpt-oss, qwen, deepseek emit
+    # <think>...</think> or <reasoning>...</reasoning> blocks that break JSON).
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+    text = re.sub(r"<reasoning>.*?</reasoning>", "", text, flags=re.DOTALL)
+
     # Attempt 1: direct parse
     try:
         return json.loads(text)
