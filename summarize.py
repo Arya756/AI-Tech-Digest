@@ -455,20 +455,29 @@ def generate_final_output(top_articles: list[dict]) -> str:
     lines = [f"🔥 DAILY TECH DIGEST — {today}\n", "=" * 50 + "\n"]
 
     for i, art in enumerate(top_articles, 1):
-        tag   = _priority_tag(art["total_score"])
-        score = art["total_score"]
+        # Coerce every field to a safe string — models occasionally omit or
+        # return null for a field, and a bare None must never crash formatting.
+        s = lambda v: (v if isinstance(v, str) else ("" if v is None else str(v)))
+        tag = _priority_tag(art.get("total_score", 0) or 0)
+        score = art.get("total_score", 0) or 0
+        title = s(art.get("title"))
+        category = s(art.get("category")) or "other"
+        source = s(art.get("source"))
+        summary = s(art.get("summary"))
+        context = s(art.get("context"))
+        why = s(art.get("why_it_matters"))
+        link = s(art.get("link"))
 
         lines.append(f"{i}. {tag}  [Score: {score}]")
-        lines.append(f"   📰 {art['title']}")
-        audience = _audience_tag(art["category"])
-        lines.append(f"   🏷️  {art['category'].upper()} | 📡 {art['source']}")
+        lines.append(f"   📰 {title}")
+        audience = _audience_tag(category)
+        lines.append(f"   🏷️  {category.upper()} | 📡 {source}")
         lines.append(f"   👥 {audience}")
-        lines.append(f"   📝 {art['summary']}")
-        context = art.get("context", "").strip()
+        lines.append(f"   📝 {summary}")
         if context:
             lines.append(f"   🧠 {context}")
-        lines.append(f"   👉 {art['why_it_matters']}")
-        lines.append(f"   🔗 {art['link']}")
+        lines.append(f"   👉 {why}")
+        lines.append(f"   🔗 {link}")
         lines.append("")
 
     lines.append("=" * 50)
