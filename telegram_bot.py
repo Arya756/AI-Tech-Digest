@@ -271,6 +271,8 @@ def _build_thumb_items(articles: list[dict], date_str: str, lang: str) -> list[d
             "link": art.get("link", ""),
             "summary": art.get("summary", ""),
             "context": art.get("context", ""),
+            "why_it_matters": art.get("why_it_matters", ""),
+            "audience": art.get("audience", ""),
         })
     return out
 
@@ -357,27 +359,14 @@ async def send_digest(chat_id: str, date_str: str | None = None) -> bool:
         print("❌  No articles parsed from digest. Check the digest file format.")
         return False
 
-    text_msg, keyboard = _format_telegram_message(articles, date_str)
-
-    print(f"\n📤 Sending digest to chat_id: {chat_id}")
-
-    # 1. Send the full formatted text briefing (web previews off → clean)
-    print("  → Sending text message...")
-    await bot.send_message(
-        chat_id    = chat_id,
-        text       = text_msg,
-        parse_mode = ParseMode.MARKDOWN_V2,
-        reply_markup = keyboard,
-        disable_web_page_preview = True,
-    )
-    print("  ✅ Text sent")
-
-    # 1.5 Send a SEQUENTIAL per-story gallery: thumbnail photo, then a short
-    # text block with a tappable "Read" link — repeated for each story, so the
-    # chat reads: thumb → text+link → thumb → text+link ... then voice at end.
-    # Guarded: a thumbnail/parse failure must never block text/voice delivery.
+    # Send a SEQUENTIAL per-story gallery: thumbnail photo, then a text block
+    # with title → source → summary → context → impact → tappable "Read" link —
+    # repeated for each story, so the chat reads:
+    #   thumb → text+link → thumb → text+link ...  then voice at the end.
+    # (The full formatted text briefing is intentionally NOT sent separately —
+    #  the gallery below is the only text delivery, per product spec.)
+    # Guarded: a thumbnail/parse failure must never block voice delivery.
     try:
-        from utils import esc as _esc
         thumb_items = _build_thumb_items(articles, date_str, lang)
         rendered = _render_thumbnails(thumb_items, date_str, lang)
         for idx, (png_path, it) in enumerate(rendered, 1):
@@ -388,29 +377,46 @@ async def send_digest(chat_id: str, date_str: str | None = None) -> bool:
             except Exception as pe:
                 print(f"  ⚠️ Thumbnail {idx} send failed: {pe}")
                 continue
-            # Then the text + tappable Read link (preview off → no auto cards)
-            title_esc = _esc(it.get("title", "")[:80])
-            src_esc   = _esc(it.get("source", ""))
-            sum_esc   = _esc(it.get("summary", "")[:300])
-            ctx_esc   = _esc(it.get("context", "")[:200])
-            link      = it.get("link", "")
-            cap = f"*{idx}\\. {title_esc}*"
-            if src_esc:
-                cap += f"\n_{src_esc}_"
-            if sum_esc:
-                cap += f"\n\n{sum_esc}"
-            elif ctx_esc:
-                cap += f"\n\n{ctx_esc}"
-            cap += f"\n\n🔗 [Read full story]({link})"
+            # Then the text block in the exact product format (HTML parse so the
+            # sub-heading labels render bold, while spacing/bullets stay exact):
+            #   1. <title>
+            #   <blank>
+            #   🌐 <audience>
+            #   <blank>
+            #   • <b>Source:</b> <source>
+            #   <blank>
+            #   • <b>Summary:</b> <summary>
+            #   <blank>
+            #   • <b>Context:</b> <context>
+            #   <blank>
+            #   • <b>Impact:</b> <why_it_matters>
+            #   <blank>
+            #   🔗 Read full story <link>
+            title = (it.get("title", "") or "")[:80]
+            src   = it.get("source", "") or ""
+            summ  = it.get("summary", "") or ""
+            ctx   = it.get("context", "") or ""
+            imp   = it.get("why_it_matters", "") or ""
+            aud   = it.get("audience", "") or "🌐 Everyone"
+            link  = it.get("link", "") or ""
+            cap = (
+                f"{idx}. {title}\n\n"
+                f"{aud}\n\n"
+                f"• <b>Source:</b> {src}\n\n"
+                f"• <b>Summary:</b> {summ}\n\n"
+                f"• <b>Context:</b> {ctx}\n\n"
+                f"• <b>Impact:</b> {imp}\n\n"
+                f"🔗 Read full story {link}"
+            )
             await bot.send_message(
                 chat_id = chat_id,
                 text = cap,
-                parse_mode = ParseMode.MARKDOWN_V2,
+                parse_mode = ParseMode.HTML,
                 disable_web_page_preview = True,
             )
         print(f"  ✅ Sequential gallery sent ({len(rendered)} stories)")
     except Exception as e:
-        print(f"  ⚠️ Gallery send failed (text/voice still delivered): {e}")
+        print(f"  ⚠️ Gallery send failed (voice still delivered): {e}")
 
     # 2. Send the voice note
     print("  → Uploading voice note...")
