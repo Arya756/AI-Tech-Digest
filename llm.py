@@ -16,15 +16,22 @@ load_dotenv()
 # configured provider gracefully falls back to the other if its API key is
 # missing. This keeps the bot alive even if an env var is forgotten on Render.
 
-PROVIDER = os.getenv("LLM_PROVIDER", "gemini").lower()
+PROVIDER = os.getenv("LLM_PROVIDER", "groq").lower()
 
-# Gemini: flash-lite for the bulk scoring pass (fast/cheap), flash for the
-# higher-quality final digest + Hindi translation.
+# Groq is the primary provider: free tier gives 14K+ requests/day and Qwen 27B
+# on Groq is fast (~0.7s/call) with solid summarization + Hindi.
+#   GROQ_MODEL            — primary model for article analysis/scoring.
+#   GROQ_MODEL_FINAL      — model for the final digest + Hindi translation.
+#   GROQ_MODEL_BACKUP     — Groq-model fallback: if the primary Groq model fails
+#                          (rate-limit / 429 / unavailable), retry the backup before
+#                          falling back to an entirely different provider.
+GROQ_MODEL = os.getenv("GROQ_MODEL", "qwen/qwen3.6-27b")
+GROQ_MODEL_FINAL = os.getenv("GROQ_MODEL_FINAL", "qwen/qwen3.8-27b")
+GROQ_MODEL_BACKUP = os.getenv("GROQ_MODEL_BACKUP", "qwen/qwen3.8-27b")
+
+# Gemini — kept as the last-resort provider fallback across the whole provider.
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-lite-latest")
 GEMINI_MODEL_FINAL = os.getenv("GEMINI_MODEL_FINAL", "gemini-flash-latest")
-
-GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
-GROQ_MODEL_FINAL = os.getenv("GROQ_MODEL_FINAL", GROQ_MODEL)
 
 
 def _content_to_str(content):
@@ -92,51 +99,65 @@ def _has_key(name: str) -> bool:
 
 
 class _LazyChatModel:
-    """Resolves the real chat model on first .invoke().
+    """Resolves a usable chat model on first .invoke(), trying candidates in
+    order so a single bad model or rate-limited provider never kills the bot.
 
-    - Builds the configured provider's model; if that provider's API key is
-      missing, falls back to the other provider (logs a warning) instead of
-      crashing the whole bot at import time.
-    - This is why a forgotten GEMINI_API_KEY on Render no longer kills startup.
+    Candidates (tried in this order):
+      1. Primary model on the primary provider
+         (e.g. Groq Qwen 3.6-27B for article analysis / scoring).
+      2. Backup model on the SAME provider (e.g. Groq Qwen 3.8-27B) — reached
+         when the primary Groq model rate-limits / 429s / is unavailable.
+      3. Fallback provider's model (e.g. Gemini flash-lite / flash-latest) —
+         only reached when BOTH Groq models fail, so the bot still delivers
+         something instead of crashing.
+
+    A candidate whose API key is missing is skipped with a logged warning
+    instead of crashing the bot at import time. This is why a forgotten
+    GEMINI_API_KEY or GROQ_API_KEY no longer kills startup.
     """
 
-    def __init__(self, primary: str, model: str, model_final_temperature: float,
-                 secondary: str, secondary_model: str):
-        self._primary = primary
-        self._model = model
-        self._temp = model_final_temperature
-        self._secondary = secondary
-        self._secondary_model = secondary_model
+    def __init__(self, primary_provider, primary_model, temp,
+                 backup_model, fallback_provider, fallback_model, fallback_temp):
+        # Ordered (provider, model, temperature) candidates.
+        self._candidates = [
+            (primary_provider, primary_model, temp),
+            (primary_provider, backup_model, temp),
+        ]
+        if fallback_provider and fallback_model:
+            self._candidates.append((fallback_provider, fallback_model, fallback_temp))
+        self._model = primary_model
         self._resolved = None
+
+    def _build(self, provider: str, model: str, temp: float):
+        if provider == "groq":
+            if not _has_key("GROQ_API_KEY"):
+                print(f"⚠️ GROQ_API_KEY missing — skipping Groq model {model}")
+                raise RuntimeError("GROQ_API_KEY missing")
+            return _build_groq(model, temp)
+        # gemini (or any other provider)
+        else:
+            if not _has_key("GEMINI_API_KEY"):
+                print(f"⚠️ GEMINI_API_KEY missing — skipping Gemini model {model}")
+                raise RuntimeError("GEMINI_API_KEY missing")
+            return _build_gemini(model, temp)
 
     def _resolve(self):
         if self._resolved is not None:
             return self._resolved
-        order = ([self._primary, self._secondary] if self._primary != self._secondary
-                 else [self._primary])
         last_err = None
-        for prov in order:
+        for prov, model, temp in self._candidates:
             try:
-                if prov == "gemini":
-                    if not _has_key("GEMINI_API_KEY"):
-                        print(f"⚠️ GEMINI_API_KEY missing — skipping Gemini")
-                        continue
-                    self._resolved = _build_gemini(self._model, self._temp)
-                    print(f"✅ LLM (gemini): {self._model}")
-                    return self._resolved
-                else:  # groq
-                    if not _has_key("GROQ_API_KEY"):
-                        print(f"⚠️ GROQ_API_KEY missing — skipping Groq")
-                        continue
-                    self._resolved = _build_groq(self._secondary_model, self._temp)
-                    print(f"✅ LLM (groq fallback): {self._secondary_model}")
-                    return self._resolved
+                self._resolved = self._build(prov, model, temp)
+                print(f"✅ LLM ({prov}): {model}  (t={temp})")
+                return self._resolved
             except Exception as e:
                 last_err = e
-                print(f"⚠️ Failed to build {prov} model: {e}")
+                print(f"⚠️ Failed to build {prov} model {model}: {e}")
         if last_err is not None:
-            raise RuntimeError(f"No usable LLM provider (tried {order}): {last_err}")
-        raise RuntimeError(f"No usable LLM provider (tried {order}) — check API keys")
+            raise RuntimeError(
+                f"No usable LLM after trying {len(self._candidates)} candidates: {last_err}"
+            )
+        raise RuntimeError("No usable LLM — check API keys")
 
     @property
     def model(self):
@@ -146,7 +167,15 @@ class _LazyChatModel:
         return self._resolve().invoke(*args, **kwargs)
 
 
-# Module-level names consumed by summarize.py / main.py. They are lazy proxies
-# that build + fall back on first use — never at import time.
-llm = _LazyChatModel("gemini", GEMINI_MODEL, 0.2, "groq", GROQ_MODEL)
-llm_final = _LazyChatModel("gemini", GEMINI_MODEL_FINAL, 0.4, "groq", GROQ_MODEL_FINAL)
+# Module-level names consumed by summarize.py / main.py. Lazy proxies that build
+# on first use and fall back through the tier list — never at import time.
+llm = _LazyChatModel(
+    primary_provider="groq", primary_model=GROQ_MODEL, temp=0.2,
+    backup_model=GROQ_MODEL_BACKUP,
+    fallback_provider="gemini", fallback_model=GEMINI_MODEL, fallback_temp=0.2,
+)
+llm_final = _LazyChatModel(
+    primary_provider="groq", primary_model=GROQ_MODEL_FINAL, temp=0.4,
+    backup_model=GROQ_MODEL,  # cross-backup: the other 27B Qwen model
+    fallback_provider="gemini", fallback_model=GEMINI_MODEL_FINAL, fallback_temp=0.4,
+)
