@@ -18,15 +18,19 @@ load_dotenv()
 
 PROVIDER = os.getenv("LLM_PROVIDER", "groq").lower()
 
-# Groq is the primary provider: free tier gives 14K+ requests/day and Qwen 27B
-# on Groq is fast (~0.7s/call) with solid summarization + Hindi.
-#   GROQ_MODEL            — primary model for article analysis/scoring.
-#   GROQ_MODEL_FINAL      — model for the final digest + Hindi translation.
+# Groq is the primary provider: free tier gives 14K+ requests/day.
+#   GROQ_MODEL            — primary model for FAST bulk article analysis/scoring.
+#                          Qwen 27B: fast (~0.7s/call), no rate-limiting, gets 5+
+#                          articles through. Used to rapidly filter+score all articles.
+#   GROQ_MODEL_FINAL      — model for FINAL OUTPUT POLISH + Hindi translation.
+#                          GPT-oss-120b (reasoning): fills blank Context/Summary/
+#                          Impact fields reliably so the delivered message has substance.
+#                          Also used for Hindi translation (short outputs, fine on Qwen).
 #   GROQ_MODEL_BACKUP     — Groq-model fallback: if the primary Groq model fails
 #                          (rate-limit / 429 / unavailable), retry the backup before
 #                          falling back to an entirely different provider.
 GROQ_MODEL = os.getenv("GROQ_MODEL", "qwen/qwen3.6-27b")
-GROQ_MODEL_FINAL = os.getenv("GROQ_MODEL_FINAL", "qwen/qwen3.8-27b")
+GROQ_MODEL_FINAL = os.getenv("GROQ_MODEL_FINAL", "openai/gpt-oss-120b")
 GROQ_MODEL_BACKUP = os.getenv("GROQ_MODEL_BACKUP", "qwen/qwen3.8-27b")
 
 # Gemini — kept as the last-resort provider fallback across the whole provider.

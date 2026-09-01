@@ -446,8 +446,63 @@ def _audience_tag(category: str) -> str:
     return AUDIENCE_TAGS.get(category, "🌐 Everyone")
 
 
+def fill_blank_fields(top_articles: list[dict], polish_llm) -> list[dict]:
+    """Polish any blank Context / why_it_matters fields on the selected top articles.
+
+    Called AFTER ranking, BEFORE final formatting. Uses the reasoning model
+    (GPT-oss-120b) to write real Context + Impact for articles that Qwen left
+    blank — without re-running the expensive bulk analysis on all articles.
+    """
+    for art in top_articles:
+        cur_context    = art.get("context", "") or ""
+        cur_why        = art.get("why_it_matters", "") or ""
+        # Only re-prompt when there's actually a blank to fill —
+        # saves tokens and keeps speed high when Qwen already filled them.
+        if cur_context.strip() and cur_why.strip():
+            continue
+
+        prompt = (
+            "Article title: " + (art.get("title", "") or "") + "\n"
+            "Article summary: " + (art.get("summary", "") or "") + "\n"
+            "Current context (may be blank): " + cur_context + "\n"
+            "Current why_it_matters (may be blank): " + cur_why + "\n"
+            "\n"
+            "Fill in ONLY the blank fields below. If a field is already filled, "
+            "keep it as-is.\n"
+            "Context: 1-2 sentences of background knowledge for a smart non-engineer "
+            "(skip for well-known entities: OpenAI, Google, Microsoft, Meta, Apple, Nvidia, "
+            "ChatGPT, LLM, GPU, AGI, AI, Tesla).\n"
+            "Why it matters: 8-12 words — WHO gains or loses WHAT specifically. Plain "
+            "language, no unexplained jargon.\n"
+            '\nReturn ONLY this JSON object (no markdown, no explanation):\n'
+            '{"context": "...", "why_it_matters": "..."}\n'
+        )
+
+        try:
+            resp = polish_llm.invoke(prompt)
+            content = resp.content
+            if not isinstance(content, str):
+                continue
+            parsed = _safe_parse_json(content)
+            if parsed is None:
+                continue
+            if not cur_context.strip():
+                art["context"] = parsed.get("context", "") or ""
+            if not cur_why.strip():
+                art["why_it_matters"] = parsed.get("why_it_matters", "") or ""
+        except Exception as exc:
+            # Never let polish failures break the digest — keep whatever Qwen wrote.
+            print(f"  ⚠️  Polish failed for {art.get('title','?')[:40]}: {exc}")
+
+    return top_articles
+
+
 def generate_final_output(top_articles: list[dict]) -> str:
     """Build the formatted digest string from pre-analyzed articles."""
+    # Option B: polish any blank Context/Impact fields with the reasoning model
+    # (GPT-oss-120b) BEFORE formatting — fast, only runs on top-N articles.
+    top_articles = fill_blank_fields(top_articles, llm_final)
+
     from datetime import datetime
     from zoneinfo import ZoneInfo
 
