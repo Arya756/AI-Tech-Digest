@@ -134,8 +134,8 @@ Rules:
 
 _GROQ_TPM_LIMIT    = 12_000
 _TOKENS_PER_REQ    = 700          # conservative estimate
-_MAX_WORKERS       = 1            # sequential — Groq free tier rejects 2+ parallel Qwen calls
-_INTER_BATCH_SLEEP = 8.0          # seconds between batches (with 1 worker, less cooling needed)
+_MAX_WORKERS       = 2            # Qwen 3.8 handles 2 parallel calls (3.6 was too aggressive)
+_INTER_BATCH_SLEEP = 6.0          # seconds between batches
 _RETRY_BASE_SLEEP  = 4.0          # base sleep on 429, doubles each retry
 
 

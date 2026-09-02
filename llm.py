@@ -29,7 +29,7 @@ PROVIDER = os.getenv("LLM_PROVIDER", "groq").lower()
 #   GROQ_MODEL_BACKUP     — Groq-model fallback: if the primary Groq model fails
 #                          (rate-limit / 429 / unavailable), retry the backup before
 #                          falling back to an entirely different provider.
-GROQ_MODEL = os.getenv("GROQ_MODEL", "qwen/qwen3.6-27b")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b")
 GROQ_MODEL_FINAL = os.getenv("GROQ_MODEL_FINAL", "openai/gpt-oss-120b")
 GROQ_MODEL_BACKUP = os.getenv("GROQ_MODEL_BACKUP", "qwen/qwen3.8-27b")
 
