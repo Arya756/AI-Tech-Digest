@@ -134,9 +134,9 @@ Rules:
 
 _GROQ_TPM_LIMIT    = 12_000
 _TOKENS_PER_REQ    = 700          # conservative estimate
-_MAX_WORKERS       = 2            # safe concurrency for free tier (was 3 — too aggressive)
-_INTER_BATCH_SLEEP = 18.0         # seconds between worker-batch completions (was 4 — too short)
-_RETRY_BASE_SLEEP  = 5.0          # base sleep on 429, doubles each retry (was 3)
+_MAX_WORKERS       = 1            # sequential — Groq free tier rejects 2+ parallel Qwen calls
+_INTER_BATCH_SLEEP = 8.0          # seconds between batches (with 1 worker, less cooling needed)
+_RETRY_BASE_SLEEP  = 4.0          # base sleep on 429, doubles each retry
 
 
 def _safe_parse_json(text: str) -> dict | None:

@@ -56,7 +56,7 @@ class _StringNormalizingChatModel:
     .content is a plain string (coerces Gemini's list-of-parts content), and
     retries transient provider errors (503/429/5xx) instead of crashing."""
 
-    def __init__(self, wrapped, max_retries: int = 4):
+    def __init__(self, wrapped, max_retries: int = 2):
         self._wrapped = wrapped
         self.model = getattr(wrapped, "model", None)
         self._max_retries = max_retries
