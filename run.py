@@ -29,8 +29,9 @@ def run_scheduler():
             current_hour = ist_now.hour
             current_minute = ist_now.minute
 
-            # Fire at the top of every hour (:00), but only once per hour
-            if current_minute == 0 and current_hour != last_fired_hour:
+            # Fire at :50 (10 min before each hour), so the 6-10 min pipeline finishes
+            # right around XX:00 and users get their digest on time. Fire once per hour.
+            if current_minute == 50 and current_hour != last_fired_hour:
                 print(f"⏰ [{ist_now.strftime('%Y-%m-%d %I:%M %p IST')}] Triggering hourly job...")
                 last_fired_hour = current_hour
                 try:

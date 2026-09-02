@@ -180,18 +180,25 @@ async def send_to_time(delivery_time: str):
     print(f"[{ist_now}] 🎉 Broadcast for {delivery_time} complete!")
 
 def hourly_job():
+    from datetime import timedelta
     ist_now = datetime.now(ZoneInfo("Asia/Kolkata"))
-    current_time = ist_now.strftime("%I:00 %p")  # "07:00 AM", "08:00 AM" etc.
-    
-    # Get subscribers for this hour
-    subscribers = get_subscribers_by_time(current_time)
+    # Scheduler fires at :50 so the 6-10 min pipeline completes by XX:00.
+    # Look up subscribers for the NEXT hour (the one we're targeting for delivery).
+    # Use timedelta so the day rolls over correctly at midnight (23:50 → 00:00 next day).
+    target_dt = ist_now + timedelta(hours=1)
+    target_dt = target_dt.replace(minute=0, second=0, microsecond=0)
+    target_time = target_dt.strftime("%I:00 %p")
+    current_time = target_time  # used downstream for log line consistency
+
+    # Get subscribers for the target hour
+    subscribers = get_subscribers_by_time(target_time)
 
     if not subscribers:
         # Log clearly so a "no messages sent" hour is diagnosable, not silent.
-        print(f"[{ist_now}] ⏰ Hourly job for {current_time}: 0 subscribers scheduled — nothing to send.")
+        print(f"[{ist_now}] ⏰ Hourly job for {target_time}: 0 subscribers scheduled — nothing to send.")
         return
 
-    print(f"[{ist_now}] 📋 {len(subscribers)} subscriber(s) scheduled for {current_time}")
+    print(f"[{ist_now}] 📋 {len(subscribers)} subscriber(s) scheduled for {target_time}")
     ensure_digest_generated()
 
     # If generation failed AND no fallback digest exists, notify subscribers
@@ -215,51 +222,51 @@ def hourly_job():
             except Exception as notify_err:
                 print(f"⚠️ Could not notify {sub['chat_id']}: {notify_err}")
         return  # Cannot proceed if digest is missing
-            
-        # Pre-generating the voice notes synchronously to prevent asyncio loop crashes
-        from voice_engine import generate_voice_note
-        
-        # Generate English voice note if needed
-        txt_path_en = Path(f"digests/digest_{today}_en.txt")
-        mp3_path_en = Path(f"digests/digest_{today}_en.mp3")
-        if txt_path_en.exists() and not mp3_path_en.exists():
+
+    # Pre-generating the voice notes synchronously to prevent asyncio loop crashes
+    from voice_engine import generate_voice_note
+
+    # Generate English voice note if needed
+    txt_path_en = Path(f"digests/digest_{today}_en.txt")
+    mp3_path_en = Path(f"digests/digest_{today}_en.mp3")
+    if txt_path_en.exists() and not mp3_path_en.exists():
+        try:
+            from db import load_digest_mp3
+            mp3_bytes = load_digest_mp3(today, "en")
+            if mp3_bytes:
+                mp3_path_en.write_bytes(mp3_bytes)
+        except Exception as e:
+            print(f"⚠️ Could not restore EN voice note from DB: {e}")
+
+        if not mp3_path_en.exists():
             try:
-                from db import load_digest_mp3
-                mp3_bytes = load_digest_mp3(today, "en")
-                if mp3_bytes:
-                    mp3_path_en.write_bytes(mp3_bytes)
+                print(f"[{ist_now}] 🎙️ Pre-generating English voice note...")
+                generate_voice_note(digest_path=txt_path_en, date_str=today, voice_key="ava", output_dir="digests")
+                from db import save_digest_mp3
+                save_digest_mp3(today, "en", mp3_path_en.read_bytes())
             except Exception as e:
-                print(f"⚠️ Could not restore EN voice note from DB: {e}")
+                print(f"⚠️ Failed to pre-generate English audio: {e}")
 
-            if not mp3_path_en.exists():
-                try:
-                    print(f"[{ist_now}] 🎙️ Pre-generating English voice note...")
-                    generate_voice_note(digest_path=txt_path_en, date_str=today, voice_key="ava", output_dir="digests")
-                    from db import save_digest_mp3
-                    save_digest_mp3(today, "en", mp3_path_en.read_bytes())
-                except Exception as e:
-                    print(f"⚠️ Failed to pre-generate English audio: {e}")
+    # Generate Hindi voice note if needed
+    txt_path_hi = Path(f"digests/digest_{today}_hi.txt")
+    mp3_path_hi = Path(f"digests/digest_{today}_hi.mp3")
+    if txt_path_hi.exists() and not mp3_path_hi.exists():
+        try:
+            from db import load_digest_mp3
+            mp3_bytes = load_digest_mp3(today, "hi")
+            if mp3_bytes:
+                mp3_path_hi.write_bytes(mp3_bytes)
+        except Exception as e:
+            print(f"⚠️ Could not restore HI voice note from DB: {e}")
 
-        # Generate Hindi voice note if needed
-        txt_path_hi = Path(f"digests/digest_{today}_hi.txt")
-        mp3_path_hi = Path(f"digests/digest_{today}_hi.mp3")
-        if txt_path_hi.exists() and not mp3_path_hi.exists():
+        if not mp3_path_hi.exists():
             try:
-                from db import load_digest_mp3
-                mp3_bytes = load_digest_mp3(today, "hi")
-                if mp3_bytes:
-                    mp3_path_hi.write_bytes(mp3_bytes)
+                print(f"[{ist_now}] 🎙️ Pre-generating Hindi voice note...")
+                generate_voice_note(digest_path=txt_path_hi, date_str=today, voice_key="hi-IN-MadhurNeural", output_dir="digests")
+                from db import save_digest_mp3
+                save_digest_mp3(today, "hi", mp3_path_hi.read_bytes())
             except Exception as e:
-                print(f"⚠️ Could not restore HI voice note from DB: {e}")
+                print(f"⚠️ Failed to pre-generate Hindi audio: {e}")
 
-            if not mp3_path_hi.exists():
-                try:
-                    print(f"[{ist_now}] 🎙️ Pre-generating Hindi voice note...")
-                    generate_voice_note(digest_path=txt_path_hi, date_str=today, voice_key="hi-IN-MadhurNeural", output_dir="digests")
-                    from db import save_digest_mp3
-                    save_digest_mp3(today, "hi", mp3_path_hi.read_bytes())
-                except Exception as e:
-                    print(f"⚠️ Failed to pre-generate Hindi audio: {e}")
-        
-        # Broadcast the result
-        asyncio.run(send_to_time(current_time))
+    # Broadcast the result
+    asyncio.run(send_to_time(current_time))
